@@ -12,16 +12,6 @@
 #include <unistd.h>
 
 
-uint8_t clamp8(double x)
-{
-    if (x >= 256.0)
-        return 255;
-    if (x < 0)
-        return 0;
-    return (uint8_t)x;
-}
-
-
 int print_capabilities(int dev_fd)
 {
     struct v4l2_capability c;
@@ -134,108 +124,6 @@ int read_image(int fd, int sizeimage)
     close(image_fd);
     fputs("Read some bytes\n", stdout);
     free(buffer);
-    return 0;
-}
-
-
-int stream_images(int fd, const char* filename_prefix, uint32_t format_type,
-        uint32_t width, uint32_t height)
-{
-    struct v4l2_requestbuffers rb;
-    rb.count = 1;
-    rb.type = format_type;
-    rb.memory = V4L2_MEMORY_MMAP;
-    rb.reserved[0] = 0;
-    rb.reserved[1] = 0;
-    int r = ioctl(fd, VIDIOC_REQBUFS, &rb);
-    if (r < 0) {
-        fputs("REQBUFS failed", stderr);
-        return -1;
-    };
-
-    fputs("Buffers:\n", stdout);
-    printf("  count = %d\n", rb.count);
-
-    fputs("  Buffer 0:\n", stdout);
-    struct v4l2_buffer b;
-    b.type = format_type;
-    b.index = 0;
-    b.reserved = 0;
-    b.reserved2 = 0;
-    r = ioctl(fd, VIDIOC_QUERYBUF, &b);
-    if (r < 0) {
-        fputs("QUERYBUF failed\n", stderr);
-        return -1;
-    };
-
-    uint8_t* mem = mmap(
-        NULL, b.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
-        b.m.offset);
-    printf("    map address = %p\n", mem);
-
-    r = ioctl(fd, VIDIOC_STREAMON, &format_type);
-    if (r < 0) {
-        fputs("STREAMON failed\n", stderr);
-        return -1;
-    };
-
-    fputs("Sleeping\n", stdout);
-    sleep(2);
-
-    char filename[strlen(filename_prefix) + 3 + 1];
-    strcpy(filename, filename_prefix);
-    char* filename_suffix = filename + strlen(filename_prefix) + 1;
-    filename_suffix[-1] = '-';
-    for (int i = 0; i <= 20; ++i) {
-        r = ioctl(fd, VIDIOC_QBUF, &b);
-        if (r < 0) {
-            fputs("QBUF failed\n", stderr);
-            return -1;
-        };
-
-        fputs("Waiting for frame\n", stdout);
-        r = ioctl(fd, VIDIOC_DQBUF, &b);
-        if (r < 0) {
-            fputs("DQBUF failed\n", stderr);
-            return -1;
-        };
-        fputs("Frame ready\n", stdout);
-
-        printf("Opening %s\n", filename);
-        sprintf(filename_suffix, "%02d", i);
-        FILE* img = fopen(filename, "wb");
-        fprintf(img, "P6 %u %u 255\n", width, height);
-        unsigned int pixels = 0;
-        for (uint32_t i = 0; i <= b.length - 4; i += 4) {
-            uint8_t y0 = mem[i];
-            uint8_t cb = mem[i + 1];
-            uint8_t y1 = mem[i + 2];
-            uint8_t cr = mem[i + 3];
-            uint8_t rgb[6] = {
-                clamp8(y0 + (1.4065 * (cr - 128))),
-                clamp8(
-                    y0 - (0.3455 * (cb - 128)) -
-                    (0.7169 * (cr - 128))),
-                clamp8(y0 + (1.7790 * (cb - 128))),
-                clamp8(y1 + (1.4065 * (cr - 128))),
-                clamp8(
-                    y1 - (0.3455 * (cb - 128)) -
-                    (0.7169 * (cr - 128))),
-                clamp8(y1 + (1.7790 * (cb - 128)))
-            };
-            fwrite(rgb, 6, 1, img);
-            pixels += 2;
-        };
-        printf("Wrote %u pixels\n", pixels);
-        fclose(img);
-        printf("Closing %s\n", filename);
-    };
-
-    r = ioctl(fd, VIDIOC_STREAMOFF, &format_type);
-    if (r < 0)
-        return -1;
-
-    munmap(mem, b.length);
     return 0;
 }
 
