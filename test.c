@@ -1,12 +1,25 @@
+#define _POSIX_C_SOURCE 1
+
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/videodev2.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+
+uint8_t clamp8(double x)
+{
+    if (x >= 256.0)
+        return 255;
+    if (x < 0)
+        return 0;
+    return (uint8_t)x;
+}
 
 
 int open_device(const char* filename)
@@ -102,7 +115,8 @@ int set_input(int fd)
 }
 
 
-int get_format(int fd, int* type, int* sizeimage)
+int get_format(int fd, uint32_t* type, uint32_t* sizeimage, uint32_t* width,
+        uint32_t* height)
 {
     struct v4l2_format f;
     f.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -116,16 +130,19 @@ int get_format(int fd, int* type, int* sizeimage)
     printf("  type = %u\n", f.type);
     printf("  width = %u\n", f.fmt.pix.width);
     printf("  height = %u\n", f.fmt.pix.height);
-    char pixelformat[4] = {
+    char pixelformat[5] = {
         f.fmt.pix.pixelformat & 0xFF,
         (f.fmt.pix.pixelformat & 0xFF00) >> 8,
         (f.fmt.pix.pixelformat & 0xFF0000) >> 16,
-        (f.fmt.pix.pixelformat & 0xFF000000) >> 24
+        (f.fmt.pix.pixelformat & 0xFF000000) >> 24,
+        0
     };
     printf("  pixelformat = %u = %s\n", f.fmt.pix.pixelformat, pixelformat);
     printf("  sizeimage = %u\n", f.fmt.pix.sizeimage);
     *type = f.type;
     *sizeimage = f.fmt.pix.sizeimage;
+    *width = f.fmt.pix.width;
+    *height = f.fmt.pix.height;
     return 0;
 }
 
@@ -151,7 +168,8 @@ int read_image(int fd, int sizeimage)
 }
 
 
-int stream_image(int fd, int format_type)
+int stream_image(int fd, const char* filename, uint32_t format_type,
+        uint32_t width, uint32_t height)
 {
     struct v4l2_requestbuffers rb;
     rb.count = 1;
@@ -180,20 +198,23 @@ int stream_image(int fd, int format_type)
         return -1;
     };
 
-    char* mem = mmap(
+    uint8_t* mem = mmap(
         NULL, b.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
         b.m.offset);
     printf("    map address = %p\n", mem);
 
-    r = ioctl(fd, VIDIOC_QBUF, &b);
-    if (r < 0) {
-        fputs("QBUF failed\n", stderr);
-        return -1;
-    };
-
     r = ioctl(fd, VIDIOC_STREAMON, &format_type);
     if (r < 0) {
         fputs("STREAMON failed\n", stderr);
+        return -1;
+    };
+
+    fputs("Sleeping\n", stdout);
+    sleep(1);
+
+    r = ioctl(fd, VIDIOC_QBUF, &b);
+    if (r < 0) {
+        fputs("QBUF failed\n", stderr);
         return -1;
     };
 
@@ -209,11 +230,33 @@ int stream_image(int fd, int format_type)
     if (r < 0)
         return -1;
 
-    fputs("Opening \"out\"\n", stdout);
-    FILE* img = fopen("out", "wb");
-    fwrite(mem, b.length, 1, img);
+    fputs("Opening output file\n", stdout);
+    FILE* img = fopen(filename, "wb");
+    fprintf(img, "P6 %u %u 255\n", width, height);
+    unsigned int pixels = 0;
+    for (uint32_t i = 0; i <= b.length - 4; i += 4) {
+        uint8_t y0 = mem[i];
+        uint8_t cb = mem[i + 1];
+        uint8_t y1 = mem[i + 2];
+        uint8_t cr = mem[i + 3];
+        uint8_t rgb[6] = {
+            clamp8((double)y0 + (1.4065 * ((double)cr - 128))),
+            clamp8(
+                (double)y0 - (0.3455 * ((double)cb - 128)) -
+                (0.7169 * ((double)cr - 128))),
+            clamp8((double)y0 + (1.7790 * ((double)cb - 128))),
+            clamp8((double)y1 + (1.4065 * ((double)cr - 128))),
+            clamp8(
+                (double)y1 - (0.3455 * ((double)cb - 128)) -
+                (0.7169 * ((double)cr - 128))),
+            clamp8((double)y1 + (1.7790 * ((double)cb - 128)))
+        };
+        fwrite(rgb, 6, 1, img);
+        pixels += 2;
+    };
+    printf("Wrote %u pixels\n", pixels);
     fclose(img);
-    fputs("Closing \"out\"\n", stdout);
+    fputs("Closing output file\n", stdout);
 
     munmap(mem, b.length);
     return 0;
@@ -235,11 +278,11 @@ int main(int argc, char** argv)
     if (set_input(fd) < 0)
         return 1;
 
-    int format_type, format_sizeimage;
-    if (get_format(fd, &format_type, &format_sizeimage) < 0)
+    uint32_t format_type, format_sizeimage, width, height;
+    if (get_format(fd, &format_type, &format_sizeimage, &width, &height) < 0)
         return 1;
 
-    if (stream_image(fd, format_type) < 0)
+    if (stream_image(fd, argv[2], format_type, width, height) < 0)
         return 1;
 
     return 0;
