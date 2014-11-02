@@ -116,12 +116,13 @@ int get_format(int fd, int* type, int* sizeimage)
     printf("  type = %u\n", f.type);
     printf("  width = %u\n", f.fmt.pix.width);
     printf("  height = %u\n", f.fmt.pix.height);
-    printf("  pixelformat = %u\n", f.fmt.pix.pixelformat);
-    fputs("  pixelformat:\n", stdout);
-    printf("    a = %c\n", f.fmt.pix.pixelformat & 0xFF);
-    printf("    b = %c\n", (f.fmt.pix.pixelformat & 0xFF00) >> 8);
-    printf("    c = %c\n", (f.fmt.pix.pixelformat & 0xFF0000) >> 16);
-    printf("    d = %c\n", (f.fmt.pix.pixelformat & 0xFF000000) >> 24);
+    char pixelformat[4] = {
+        f.fmt.pix.pixelformat & 0xFF,
+        (f.fmt.pix.pixelformat & 0xFF00) >> 8,
+        (f.fmt.pix.pixelformat & 0xFF0000) >> 16,
+        (f.fmt.pix.pixelformat & 0xFF000000) >> 24
+    };
+    printf("  pixelformat = %u = %s\n", f.fmt.pix.pixelformat, pixelformat);
     printf("sizeimage = %u\n", f.fmt.pix.sizeimage);
     *type = f.type;
     *sizeimage = f.fmt.pix.sizeimage;
