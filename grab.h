@@ -18,7 +18,7 @@ struct grabber {
     uint32_t height;
 };
 
-void print_info(const char* device);
+void print_info(const char* device, int input_index);
 
 struct grabber* create_grabber(
     const char* device, int input_index, int verbose);

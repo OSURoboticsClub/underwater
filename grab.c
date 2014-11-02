@@ -240,7 +240,7 @@ int stream_images(int fd, const char* filename_prefix, uint32_t format_type,
 }
 
 
-void print_info(const char* device)
+void print_info(const char* device, int input_index)
 {
     int dev_fd = open(device, O_RDWR);
     if (dev_fd < 0) {
@@ -250,7 +250,7 @@ void print_info(const char* device)
 
     print_capabilities(dev_fd);
     print_input_info(dev_fd);
-    set_input(dev_fd, 0);
+    set_input(dev_fd, input_index);
     print_format(dev_fd);
 
     close(dev_fd);

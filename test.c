@@ -12,13 +12,14 @@ int main(int argc, char** argv)
         return 2;
     };
 
-    print_info(argv[1]);
+    print_info(argv[1], 0);
 
     struct grabber* g = create_grabber(argv[1], 0, 1);
     if (g == NULL) {
         fputs("Couldn't initialize grabber\n", stderr);
         return 1;
     };
+    fputs("\n", stdout);
 
     fputs("Sleeping...\n", stdout);
     sleep(2);
