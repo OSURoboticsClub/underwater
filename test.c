@@ -210,9 +210,9 @@ int stream_image(int fd, int format_type)
         return -1;
 
     fputs("Opening \"out\"\n", stdout);
-    int img_fd = open("out", O_WRONLY | O_CREAT);
-    write(img_fd, mem, b.length);
-    close(img_fd);
+    FILE* img = fopen("out", "wb");
+    fwrite(mem, b.length, 1, img);
+    fclose(img);
     fputs("Closing \"out\"\n", stdout);
 
     munmap(mem, b.length);
