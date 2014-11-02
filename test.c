@@ -12,27 +12,27 @@
 int open_device(const char* filename)
 {
     int fd = open(filename, O_RDWR);
-    if (fd >= 0)
-        return fd;
+    if (fd < 0) {
+        if (errno == ENOENT)
+            fputs("ENOENT (File does not exist)\n", stderr);
+        else if (errno == EACCES)
+            fputs("EACCES (Can't access device)\n", stderr);
+        else if (errno == EBUSY)
+            fputs("EBUSY (Device is busy)\n", stderr);
+        else if (errno == ENXIO)
+            fputs("ENXIO\n", stderr);
+        else if (errno == ENOMEM)
+            fputs("ENOMEM\n", stderr);
+        else if (errno == EMFILE)
+            fputs("EMFILE\n", stderr);
+        else if (errno == ENFILE)
+            fputs("ENFILE\n", stderr);
+        else
+            fputs("Unknown error opening device\n", stderr);
+        return -1;
+    };
 
-    if (errno == ENOENT)
-        fputs("ENOENT (File does not exist)\n", stderr);
-    else if (errno == EACCES)
-        fputs("EACCES (Can't access device)\n", stderr);
-    else if (errno == EBUSY)
-        fputs("EBUSY (Device is busy)\n", stderr);
-    else if (errno == ENXIO)
-        fputs("ENXIO\n", stderr);
-    else if (errno == ENOMEM)
-        fputs("ENOMEM\n", stderr);
-    else if (errno == EMFILE)
-        fputs("EMFILE\n", stderr);
-    else if (errno == ENFILE)
-        fputs("ENFILE\n", stderr);
-    else
-        fputs("Unknown error opening device\n", stderr);
-
-    return -1;
+    return fd;
 }
 
 
