@@ -125,7 +125,7 @@ void print_info(const char* device, int input_index)
 
 
 struct grabber* create_grabber(
-        const char* device, int input_index, int verbose)
+        const char* device, int input_index, int width, int height)
 {
     struct grabber* grabber = malloc(sizeof(struct grabber));
     int r;
@@ -148,6 +148,16 @@ struct grabber* create_grabber(
     r = ioctl(grabber->dev_fd, VIDIOC_G_FMT, &f);
     if (r < 0) {
         fprintf(stderr, "Error: Couldn't get format (%s)\n", strerror(errno));
+        free(grabber);
+        return NULL;
+    };
+
+    f.fmt.pix.width = width;
+    f.fmt.pix.height = height;
+
+    r = ioctl(grabber->dev_fd, VIDIOC_S_FMT, &f);
+    if (r < 0) {
+        fprintf(stderr, "Error: Couldn't set format (%s)\n", strerror(errno));
         free(grabber);
         return NULL;
     };

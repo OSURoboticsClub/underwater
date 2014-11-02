@@ -25,11 +25,13 @@ int main(int argc, char** argv)
 
     print_info(argv[1], 0);
 
-    struct grabber* g = create_grabber(argv[1], 0, 1);
+    struct grabber* g = create_grabber(argv[1], 0, 320, 240);
     if (g == NULL) {
         fputs("Oh no! Couldn't initialize grabber\n", stderr);
         return 1;
     };
+
+    printf("Dimensions set to %ux%u\n", g->width, g->height);
     fputs("\n", stdout);
 
     fputs("Sleeping...\n", stdout);
@@ -38,6 +40,7 @@ int main(int argc, char** argv)
     char filename[strlen(argv[2]) + 3 + 1];
     strcpy(filename, argv[2]);
     char* filename_suffix = filename + strlen(argv[2]) + 1;
+    filename_suffix[-1] = '-';
     for (int i = 0; i <= 20; ++i) {
         fputs("Grabbing frame...\n", stdout);
         int r = grab(g);

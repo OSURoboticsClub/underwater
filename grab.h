@@ -21,7 +21,7 @@ struct grabber {
 void print_info(const char* device, int input_index);
 
 struct grabber* create_grabber(
-    const char* device, int input_index, int verbose);
+    const char* device, int input_index, int width, int height);
 
 int grab(struct grabber* grabber);
 
