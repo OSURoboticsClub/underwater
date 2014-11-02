@@ -107,27 +107,6 @@ int print_format(int fd)
 }
 
 
-int read_image(int fd, int sizeimage)
-{
-    printf("About to read %d bytes\n", sizeimage);
-    char* buffer = malloc(sizeimage * sizeof(char));
-    ssize_t bytes_read = read(fd, buffer, sizeimage);
-    if (bytes_read != sizeimage) {
-        fprintf(stderr, "Error: Couldn't read image (%s)\n", strerror(errno));
-        fprintf(stderr, "Only read %zd bytes\n", bytes_read);
-        free(buffer);
-        return -1;
-    };
-
-    int image_fd = open("out", O_WRONLY);
-    write(image_fd, buffer, sizeimage);
-    close(image_fd);
-    fputs("Read some bytes\n", stdout);
-    free(buffer);
-    return 0;
-}
-
-
 void print_info(const char* device, int input_index)
 {
     int dev_fd = open(device, O_RDWR);
