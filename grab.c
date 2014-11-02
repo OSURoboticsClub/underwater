@@ -111,7 +111,7 @@ void print_info(const char* device, int input_index)
 {
     int dev_fd = open(device, O_RDWR);
     if (dev_fd < 0) {
-        fprintf(stderr, "Couldn't open device (%s)\n", strerror(errno));
+        fprintf(stderr, "Error: Couldn't open device (%s)\n", strerror(errno));
         return;
     };
 
@@ -132,7 +132,7 @@ struct grabber* create_grabber(
 
     grabber->dev_fd = open(device, O_RDWR);
     if (grabber->dev_fd < 0) {
-        fprintf(stderr, "Couldn't open device (%s)\n", strerror(errno));
+        fprintf(stderr, "Error: Couldn't open device (%s)\n", strerror(errno));
         free(grabber);
         return NULL;
     };
