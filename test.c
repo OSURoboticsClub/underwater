@@ -176,7 +176,7 @@ int stream_image(int fd, int format_type)
     b.reserved2 = 0;
     r = ioctl(fd, VIDIOC_QUERYBUF, &b);
     if (r < 0) {
-        fputs("QUERYBUF failed.\n", stderr);
+        fputs("QUERYBUF failed\n", stderr);
         return -1;
     };
 
@@ -186,16 +186,25 @@ int stream_image(int fd, int format_type)
     printf("    map address = %p\n", mem);
 
     r = ioctl(fd, VIDIOC_QBUF, &b);
-    if (r < 0)
+    if (r < 0) {
+        fputs("QBUF failed\n", stderr);
         return -1;
+    };
+
     r = ioctl(fd, VIDIOC_STREAMON, &format_type);
-    if (r < 0)
+    if (r < 0) {
+        fputs("STREAMON failed\n", stderr);
         return -1;
+    };
+
     fputs("Waiting for frame\n", stdout);
     r = ioctl(fd, VIDIOC_DQBUF, &b);
-    if (r < 0)
+    if (r < 0) {
+        fputs("DQBUF failed\n", stderr);
         return -1;
-    fputs("Frame written\n", stdout);
+    };
+    fputs("Frame ready\n", stdout);
+
     r = ioctl(fd, VIDIOC_STREAMOFF, &format_type);
     if (r < 0)
         return -1;
