@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -17,15 +18,20 @@ uint8_t clamp8(double x)
 
 int main(int argc, char** argv)
 {
-    if (argc != 3) {
+    if (argc != 5) {
         fputs("Usage:\n", stdout);
-        fputs("  ./test device filename-prefix\n", stdout);
+        fputs("  ./test device width height filename-prefix\n", stdout);
         return 2;
     };
 
-    print_info(argv[1], 0);
+    char* device = argv[1];
+    int width = atoi(argv[2]);
+    int height = atoi(argv[3]);
+    char* filename_prefix = argv[4];
 
-    struct grabber* g = create_grabber(argv[1], 0, 320, 240);
+    print_info(device, 0);
+
+    struct grabber* g = create_grabber(argv[1], 0, height, width);
     if (g == NULL) {
         fputs("Oh no! Couldn't initialize grabber\n", stderr);
         return 1;
@@ -37,9 +43,9 @@ int main(int argc, char** argv)
     fputs("Sleeping...\n", stdout);
     sleep(2);
 
-    char filename[strlen(argv[2]) + 3 + 1];
-    strcpy(filename, argv[2]);
-    char* filename_suffix = filename + strlen(argv[2]) + 1;
+    char filename[strlen(filename_prefix) + 3 + 1];
+    strcpy(filename, filename_prefix);
+    char* filename_suffix = filename + strlen(filename_prefix) + 1;
     filename_suffix[-1] = '-';
     for (int i = 0; i <= 20; ++i) {
         fputs("Grabbing frame...\n", stdout);
