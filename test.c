@@ -245,7 +245,7 @@ int stream_images(int fd, const char* filename_prefix, uint32_t format_type,
         };
         fputs("Frame ready\n", stdout);
 
-        fputs("Opening output file\n", stdout);
+        printf("Opening %s\n", filename);
         sprintf(filename_suffix, "%02d", i);
         FILE* img = fopen(filename, "wb");
         fprintf(img, "P6 %u %u 255\n", width, height);
@@ -272,7 +272,7 @@ int stream_images(int fd, const char* filename_prefix, uint32_t format_type,
         };
         printf("Wrote %u pixels\n", pixels);
         fclose(img);
-        fputs("Closing output file\n", stdout);
+        printf("Closing %s\n", filename);
     };
 
     r = ioctl(fd, VIDIOC_STREAMOFF, &format_type);
