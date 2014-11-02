@@ -90,25 +90,6 @@ int set_input(int dev_fd, int input_index)
 }
 
 
-int get_format(int dev_fd, uint32_t* type, uint32_t* sizeimage,
-        uint32_t* width, uint32_t* height)
-{
-    struct v4l2_format f;
-    f.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    int r = ioctl(dev_fd, VIDIOC_G_FMT, &f);
-    if (r < 0) {
-        fprintf(stderr, "Error: Couldn't get format (%s)\n", strerror(errno));
-        return -1;
-    };
-
-    *type = f.type;
-    *sizeimage = f.fmt.pix.sizeimage;
-    *width = f.fmt.pix.width;
-    *height = f.fmt.pix.height;
-    return 0;
-}
-
-
 int print_format(int fd)
 {
     struct v4l2_format f;
@@ -304,6 +285,8 @@ struct grabber* create_grabber(
         return NULL;
     };
     grabber->format_type = f.type;
+    grabber->width = f.fmt.pix.width;
+    grabber->height = f.fmt.pix.height;
 
     struct v4l2_requestbuffers rb;
     rb.count = 1;
@@ -351,6 +334,30 @@ struct grabber* create_grabber(
     };
 
     return grabber;
+}
+
+
+int grab(struct grabber* grabber)
+{
+    int r;
+
+    r = ioctl(grabber->dev_fd, VIDIOC_QBUF, &grabber->buffer);
+    if (r < 0) {
+        fprintf(
+            stderr, "Error: Couldn't enqueue buffer (%s)\n",
+            strerror(errno));
+        return -1;
+    };
+
+    r = ioctl(grabber->dev_fd, VIDIOC_DQBUF, &grabber->buffer);
+    if (r < 0) {
+        fprintf(
+            stderr, "Error: Couldn't dequeue buffer (%s)\n",
+            strerror(errno));
+        return -1;
+    };
+
+    return 0;
 }
 
 
