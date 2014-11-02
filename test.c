@@ -123,7 +123,7 @@ int get_format(int fd, int* type, int* sizeimage)
         (f.fmt.pix.pixelformat & 0xFF000000) >> 24
     };
     printf("  pixelformat = %u = %s\n", f.fmt.pix.pixelformat, pixelformat);
-    printf("sizeimage = %u\n", f.fmt.pix.sizeimage);
+    printf("  sizeimage = %u\n", f.fmt.pix.sizeimage);
     *type = f.type;
     *sizeimage = f.fmt.pix.sizeimage;
     return 0;
