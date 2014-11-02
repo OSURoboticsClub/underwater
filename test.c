@@ -51,13 +51,19 @@ int main(int argc, char** argv)
         fputs("Grabbing frame...\n", stdout);
         int r = grab(g);
         if (r < 0) {
-            fputs("Oh no! Couldn't grab frame.\n", stdout);
+            fputs("Oh no! Couldn't grab frame.\n", stderr);
+            break;
         };
 
         sprintf(filename_suffix, "%02d", i);
         printf("Writing to \"%s\"...\n", filename);
 
         FILE* img = fopen(filename, "wb");
+        if (img == NULL) {
+            fputs("Oh no! Couldn't open \"%s\" for writing.\n", stderr);
+            break;
+        };
+
         fprintf(img, "P6 %u %u 255\n", g->width, g->height);
         unsigned int pixels = 0;
         for (int j = 0; j <= g->buffer.length - 4; j += 4) {
@@ -76,6 +82,7 @@ int main(int argc, char** argv)
             fwrite(rgb, 6, 1, img);
             pixels += 2;
         };
+
         fclose(img);
         printf("Wrote %u pixels\n", pixels);
     };
