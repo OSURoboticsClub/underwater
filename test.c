@@ -240,16 +240,16 @@ int stream_image(int fd, const char* filename, uint32_t format_type,
         uint8_t y1 = mem[i + 2];
         uint8_t cr = mem[i + 3];
         uint8_t rgb[6] = {
-            clamp8((double)y0 + (1.4065 * ((double)cr - 128))),
+            clamp8(y0 + (1.4065 * (cr - 128))),
             clamp8(
-                (double)y0 - (0.3455 * ((double)cb - 128)) -
-                (0.7169 * ((double)cr - 128))),
-            clamp8((double)y0 + (1.7790 * ((double)cb - 128))),
-            clamp8((double)y1 + (1.4065 * ((double)cr - 128))),
+                y0 - (0.3455 * (cb - 128)) -
+                (0.7169 * (cr - 128))),
+            clamp8(y0 + (1.7790 * (cb - 128))),
+            clamp8(y1 + (1.4065 * (cr - 128))),
             clamp8(
-                (double)y1 - (0.3455 * ((double)cb - 128)) -
-                (0.7169 * ((double)cr - 128))),
-            clamp8((double)y1 + (1.7790 * ((double)cb - 128)))
+                y1 - (0.3455 * (cb - 128)) -
+                (0.7169 * (cr - 128))),
+            clamp8(y1 + (1.7790 * (cb - 128)))
         };
         fwrite(rgb, 6, 1, img);
         pixels += 2;
