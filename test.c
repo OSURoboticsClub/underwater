@@ -105,14 +105,20 @@ int set_input(int fd)
 
 int get_format(int fd, int* type, int* sizeimage)
 {
+    fputs("Format:\n", stdout);
     struct v4l2_format f;
     f.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     int r = ioctl(fd, VIDIOC_G_FMT, &f);
     if (r >= 0) {
-        printf("type = %u\n", f.type);
-        printf("width = %u\n", f.fmt.pix.width);
-        printf("height = %u\n", f.fmt.pix.height);
-        printf("pixelformat = %u\n", f.fmt.pix.pixelformat);
+        printf("  type = %u\n", f.type);
+        printf("  width = %u\n", f.fmt.pix.width);
+        printf("  height = %u\n", f.fmt.pix.height);
+        printf("  pixelformat = %u\n", f.fmt.pix.pixelformat);
+        fputs("  pixelformat:\n", stdout);
+        printf("    a = %c\n", f.fmt.pix.pixelformat & 0xFF);
+        printf("    b = %c\n", (f.fmt.pix.pixelformat & 0xFF00) >> 8);
+        printf("    c = %c\n", (f.fmt.pix.pixelformat & 0xFF0000) >> 16);
+        printf("    d = %c\n", (f.fmt.pix.pixelformat & 0xFF000000) >> 24);
         printf("sizeimage = %u\n", f.fmt.pix.sizeimage);
         *type = f.type;
         *sizeimage = f.fmt.pix.sizeimage;
