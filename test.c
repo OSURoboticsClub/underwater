@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 
@@ -35,7 +36,7 @@ int open_device(const char* filename)
 }
 
 
-int check_capabilities(int fd)
+int print_capabilities(int fd)
 {
     struct v4l2_capability c;
     int r = ioctl(fd, VIDIOC_QUERYCAP, &c);
@@ -102,7 +103,7 @@ int set_input(int fd)
 }
 
 
-int get_format(int fd)
+int get_format(int fd, int* type, int* sizeimage)
 {
     struct v4l2_format f;
     f.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -113,7 +114,9 @@ int get_format(int fd)
         printf("height = %u\n", f.fmt.pix.height);
         printf("pixelformat = %u\n", f.fmt.pix.pixelformat);
         printf("sizeimage = %u\n", f.fmt.pix.sizeimage);
-        return f.fmt.pix.sizeimage;
+        *type = f.type;
+        *sizeimage = f.fmt.pix.sizeimage;
+        return 0;
     };
 
     fputs("Couldn't get format\n", stdout);
@@ -142,13 +145,72 @@ int read_image(int fd, int sizeimage)
 }
 
 
+int stream_image(int fd, int format_type)
+{
+    fputs("Buffers:\n", stdout);
+    struct v4l2_requestbuffers rb;
+    rb.count = 1;
+    rb.type = format_type;
+    rb.memory = V4L2_MEMORY_MMAP;
+    rb.reserved[0] = 0;
+    rb.reserved[1] = 0;
+    int r = ioctl(fd, VIDIOC_REQBUFS, &rb);
+    if (r >= 0) {
+        printf("  count = %d\n", rb.count);
+
+        fputs("  Buffer 0:\n", stdout);
+        struct v4l2_buffer b;
+        b.type = format_type;
+        b.index = 0;
+        b.reserved = 0;
+        b.reserved2 = 0;
+        r = ioctl(fd, VIDIOC_QUERYBUF, &b);
+        if (r >= 0) {
+            char* mem = mmap(
+                NULL, b.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+                b.m.offset);
+            printf("    map address = %p\n", mem);
+
+            r = ioctl(fd, VIDIOC_QBUF, &b);
+            if (r < 0)
+                return -1;
+            r = ioctl(fd, VIDIOC_STREAMON, &format_type);
+            if (r < 0)
+                return -1;
+            fputs("Waiting for frame\n", stdout);
+            r = ioctl(fd, VIDIOC_DQBUF, &b);
+            if (r < 0)
+                return -1;
+            fputs("Frame written\n", stdout);
+            r = ioctl(fd, VIDIOC_STREAMOFF, &format_type);
+            if (r < 0)
+                return -1;
+
+            fputs("Opening \"out\"\n", stdout);
+            int img_fd = open("out", O_WRONLY | O_CREAT);
+            write(img_fd, mem, b.length);
+            close(img_fd);
+            fputs("Closing \"out\"\n", stdout);
+
+            munmap(mem, b.length);
+            return 0;
+        };
+
+        fputs("QUERYBUF failed.\n", stderr);
+    };
+
+    fputs("REQBUFS failed", stderr);
+    return -1;
+}
+
+
 int main(int argc, char** argv)
 {
     int fd = open_device(argv[1]);
     if (fd < 0)
         return 1;
 
-    if (check_capabilities(fd) < 0)
+    if (print_capabilities(fd) < 0)
         return 1;
 
     if (print_device_info(fd) < 0)
@@ -157,11 +219,11 @@ int main(int argc, char** argv)
     if (set_input(fd) < 0)
         return 1;
 
-    int sizeimage = get_format(fd);
-    if (sizeimage < 0)
+    int format_type, format_sizeimage;
+    if (get_format(fd, &format_type, &format_sizeimage) < 0)
         return 1;
 
-    if (read_image(fd, sizeimage) < 0)
+    if (stream_image(fd, format_type) < 0)
         return 1;
 
     return 0;
