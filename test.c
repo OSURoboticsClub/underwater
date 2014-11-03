@@ -26,11 +26,19 @@ uint8_t clamp_2(int16_t x)
 }
 
 
-uint16_t convolve(uint8_t* data, int width, int i)
+uint8_t convolve_y(uint8_t* data, int width, int i)
 {
-    return (
+    return clamp_2(
         -4*data[i] + data[i - 2] + data[i + 2] + data[i - width] +
         data[i + width]);
+}
+
+
+void to_rgb(uint8_t* rgb, int y, int cb, int cr)
+{
+    rgb[0] = clamp_d(1.164*(y - 16) + 1.596*(cr - 128));
+    rgb[1] = clamp_d(1.164*(y - 16) - 0.813*(cr - 128) - 0.392*(cb - 128));
+    rgb[2] = clamp_d(1.164*(y - 16) + 2.017*(cb - 128));
 }
 
 
@@ -87,14 +95,9 @@ int main(int argc, char** argv)
             uint8_t cb = g->frame_data[j + 1];
             uint8_t y1 = g->frame_data[j + 2];
             uint8_t cr = g->frame_data[j + 3];
-            uint8_t rgb[6] = {
-                clamp_d(1.164*(y0 - 16) + 1.596*(cr - 128)),
-                clamp_d(1.164*(y0 - 16) - 0.813*(cr - 128) - 0.392*(cb - 128)),
-                clamp_d(1.164*(y0 - 16) + 2.017*(cb - 128)),
-                clamp_d(1.164*(y1 - 16) + 1.596*(cr - 128)),
-                clamp_d(1.164*(y1 - 16) - 0.813*(cr - 128) - 0.392*(cb - 128)),
-                clamp_d(1.164*(y1 - 16) + 2.017*(cb - 128)),
-            };
+            uint8_t rgb[6];
+            to_rgb(rgb, y0, cb, cr);
+            to_rgb(rgb + 3, y1, cb, cr);
             fwrite(rgb, 6, 1, img);
         };
         fclose(img);
@@ -114,8 +117,8 @@ int main(int argc, char** argv)
             if (j % data_width == 0 || j % data_width == data_width - 4) {
                 continue;
             };
-            uint8_t y0 = clamp_2(convolve(g->frame_data, data_width, j));
-            uint8_t y1 = clamp_2(convolve(g->frame_data, data_width, j + 2));
+            uint8_t y0 = convolve_y(g->frame_data, data_width, j);
+            uint8_t y1 = convolve_y(g->frame_data, data_width, j + 2);
             fwrite(&y0, 1, 1, img);
             fwrite(&y1, 1, 1, img);
         };
