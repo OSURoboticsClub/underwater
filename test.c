@@ -55,9 +55,7 @@ int main(int argc, char** argv)
     int height = atoi(argv[3]);
     char* filename_prefix = argv[4];
 
-    print_info(device, 0);
-
-    struct grabber* g = create_grabber(argv[1], 0, height, width);
+    struct grabber* g = create_grabber(device, 0, height, width);
     if (g == NULL) {
         fputs("Oh no! Couldn't initialize grabber\n", stderr);
         return 1;
