@@ -11,6 +11,16 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "utils.h"
+
+
+void to_rgb(uint8_t* rgb, int y, int cb, int cr)
+{
+    rgb[0] = clamp_d(1.164*(y - 16) + 1.596*(cr - 128));
+    rgb[1] = clamp_d(1.164*(y - 16) - 0.813*(cr - 128) - 0.392*(cb - 128));
+    rgb[2] = clamp_d(1.164*(y - 16) + 2.017*(cb - 128));
+}
+
 
 int print_capabilities(int dev_fd)
 {
@@ -164,6 +174,9 @@ struct grabber* create_grabber(
     grabber->format_type = f.type;
     grabber->width = f.fmt.pix.width;
     grabber->height = f.fmt.pix.height;
+    grabber->pixelformat = f.fmt.pix.pixelformat;
+
+    grabber->frame = malloc(grabber->width * grabber->height * 3);
 
     struct v4l2_requestbuffers rb;
     rb.count = 1;
@@ -192,11 +205,11 @@ struct grabber* create_grabber(
         return NULL;
     };
 
-    grabber->frame_data = mmap(
+    grabber->raw_frame = mmap(
         NULL, grabber->buffer.length, PROT_READ | PROT_WRITE, MAP_SHARED,
         grabber->dev_fd, grabber->buffer.m.offset);
-    if (grabber->frame_data == NULL) {
-        fputs("Error: Couldn't mmap frame data\n", stderr);
+    if (grabber->raw_frame == NULL) {
+        fputs("Error: Couldn't mmap frame\n", stderr);
         free(grabber);
         return NULL;
     };
@@ -205,7 +218,7 @@ struct grabber* create_grabber(
     if (r < 0) {
         fprintf(
             stderr, "Error: Couldn't start streaming (%s)\n", strerror(errno));
-        munmap(grabber->frame_data, grabber->buffer.length);
+        munmap(grabber->raw_frame, grabber->buffer.length);
         free(grabber);
         return NULL;
     };
@@ -238,10 +251,44 @@ int grab(struct grabber* grabber)
 }
 
 
+int process(struct grabber* grabber)
+{
+    uint8_t* p = grabber->frame;
+    if (grabber->pixelformat == 1448695129) {  // YUYV
+        for (int i = 0; i <= grabber->buffer.length - 4; i += 4) {
+            uint8_t y0 = grabber->raw_frame[i];
+            uint8_t cb = grabber->raw_frame[i + 1];
+            uint8_t y1 = grabber->raw_frame[i + 2];
+            uint8_t cr = grabber->raw_frame[i + 3];
+            to_rgb(p, y0, cb, cr);
+            to_rgb(p + 3, y1, cb, cr);
+            p += 6;
+        };
+    } else if (grabber->pixelformat == 1498831189) {  // UYVY
+        for (int i = 0; i <= grabber->buffer.length - 4; i += 4) {
+            uint8_t cb = grabber->raw_frame[i];
+            uint8_t y0 = grabber->raw_frame[i + 1];
+            uint8_t cr = grabber->raw_frame[i + 2];
+            uint8_t y1 = grabber->raw_frame[i + 3];
+            to_rgb(p, y0, cb, cr);
+            to_rgb(p + 3, y1, cb, cr);
+            p += 6;
+        };
+    } else {
+        fprintf(stderr, "Unrecognized pixelformat %d\n",
+            grabber->pixelformat);
+        return -1;
+    };
+
+    return 0;
+}
+
+
 void delete_grabber(struct grabber* grabber)
 {
     ioctl(grabber->dev_fd, VIDIOC_STREAMOFF, &grabber->format_type);
-    munmap(grabber->frame_data, grabber->buffer.length);
+    munmap(grabber->raw_frame, grabber->buffer.length);
     close(grabber->dev_fd);
+    free(grabber->frame);
     free(grabber);
 }

@@ -41,7 +41,7 @@ debug: $(BIN)
 
 all: $(BIN)
 
-$(BIN): .obj/grab.o
+$(BIN): .obj/grab.o .obj/utils.o
 	@echo
 	@echo "=== Linking ==="
 	$(CC) $(LDFLAGS) $(CFLAGS) $^ -o $@
