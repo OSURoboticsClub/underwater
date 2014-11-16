@@ -1,0 +1,5 @@
+.*.sw?
+
+/test
+/.obj/
+/.odep/
