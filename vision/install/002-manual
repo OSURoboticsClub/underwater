@@ -1,0 +1,9 @@
+mkdir -p lib/opencv/build
+cd lib/opencv/build
+cmake ..
+make
+cd -
+
+cd lib/v4l2capture
+python setup.py build
+python setup.py install
