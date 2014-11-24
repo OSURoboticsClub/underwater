@@ -1,1 +1,1 @@
-pip install numpy
+pip install numpy==1.9.1
