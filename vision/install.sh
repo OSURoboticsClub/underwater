@@ -9,6 +9,6 @@ fi
 
 source ../.env/bin/activate
 
-for f in requirements/*; do
+for f in install/*; do
     bash $f
 done
