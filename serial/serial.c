@@ -25,7 +25,9 @@ void send_message(union sigval sv)
 {
     fputs("Pretending to send message...\n", stdout);
     for (int i = 0; i <= num_clients - 1; ++i) {
-        if (send(clients[i], ".", 1, MSG_NOSIGNAL) != 1) {
+        char msg[2];
+        snprintf(msg, 2, "%d", i);
+        if (send(clients[i], &msg, 1, MSG_NOSIGNAL) != 1) {
             if (errno == EPIPE) {
                 printf("Client %d disappeared.\n", i);
                 for (int j = i; j <= num_clients - 2; ++j)
