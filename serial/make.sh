@@ -2,4 +2,4 @@
 
 set -o errexit
 
-gcc -std=c99 -Wall -Wextra -pedantic serial.c -o serial
+gcc -std=c99 -Wall -Wextra -Wno-unused-parameter -pedantic serial.c -lrt -o serial
