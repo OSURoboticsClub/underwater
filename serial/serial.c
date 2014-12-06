@@ -13,19 +13,31 @@
 #include <unistd.h>
 
 
-#define SOCKET_FILENAME "serial.socket"
+#define SOCKET_FILENAME "socket"
+#define MAX_CLIENTS 8
+
+
+int clients[MAX_CLIENTS];
+int num_clients = 0;
 
 
 void send_message(union sigval sv)
 {
     fputs("Pretending to send message...\n", stdout);
+    for (int i = 0; i <= num_clients - 1; ++i) {
+        if (send(clients[i], ".", 1, MSG_NOSIGNAL) != 1) {
+            fprintf(stderr, "serial: ERROR: Could not notify client %d (%s)\n",
+                i, strerror(errno));
+            abort();
+        }
+    }
 }
 
 
 int init_socket()
 {
-    int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (socket_fd == -1) {
+    int listener = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (listener == -1) {
         fprintf(stderr, "serial: ERROR: Could not create socket (%s)\n",
             strerror(errno));
         return -1;
@@ -35,30 +47,31 @@ int init_socket()
     sa.sun_family = AF_UNIX;
     strcpy(sa.sun_path, SOCKET_FILENAME);
     unlink(SOCKET_FILENAME);
-    if (bind(socket_fd, (struct sockaddr*)&sa, sizeof(struct sockaddr_un))
+    if (bind(listener, (struct sockaddr*)&sa, sizeof(sa))
             == -1) {
-        fprintf(stderr, "serial: ERROR: Could not bind (%s)\n",
+        fprintf(stderr, "serial: ERROR: Could not bind socket (%s)\n",
             strerror(errno));
         return -1;
     }
 
-    if (listen(socket_fd, 5) == -1) {
-        fprintf(stderr, "serial: ERROR: Could not listen (%s)\n",
+    if (listen(listener, MAX_CLIENTS) == -1) {
+        fprintf(stderr, "serial: ERROR: Could not listen on socket (%s)\n",
             strerror(errno));
         return -1;
     }
 
-    return socket_fd;
+    return listener;
 }
 
 
 int init_timer()
 {
-    struct sigevent sev;
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_value.sival_int = 0;
-    sev.sigev_notify_function = send_message;
-    sev.sigev_notify_attributes = NULL;
+    struct sigevent sev = {
+        .sigev_notify = SIGEV_THREAD,
+        .sigev_value.sival_int = 0,
+        .sigev_notify_function = send_message,
+        .sigev_notify_attributes = NULL
+    };
     timer_t timerid;
     if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1) {
         fprintf(stderr, "serial: ERROR: Could not create timer (%s)\n",
@@ -80,8 +93,8 @@ int init_timer()
 void die(int signum)
 {
     assert(signum == SIGINT || signum == SIGQUIT || signum == SIGABRT);
-    unlink(SOCKET_FILENAME);
-    fputs("\nserial: Dying...\n", stderr);
+    unlink(SOCKET_FILENAME);  // Ignore errors.
+    fputs("serial: Dying...\n", stderr);
     exit(2);
 }
 
@@ -95,28 +108,39 @@ int main()
         exit(1);
     }
 
-    fputs("Initializing socket...\n", stdout);
-    int socket_fd = init_socket();
-    if (socket_fd == -1)
+    fputs("Initializing...\n", stdout);
+
+    int listener = init_socket();
+    if (listener == -1)
         abort();
 
-    if (signal(SIGINT, die) == SIG_ERR
-            || signal(SIGQUIT, die) == SIG_ERR) {
+    if (signal(SIGINT, die) == SIG_ERR || signal(SIGQUIT, die) == SIG_ERR) {
         fprintf(stderr,
             "serial: ERROR: Could not set up signal handler (%s)\n",
             strerror(errno));
         abort();
     }
 
-    fputs("Initializing timer...\n", stdout);
     if (init_timer() == -1)
         abort();
 
-    fd_set socket_fd_set;
-    FD_ZERO(&socket_fd_set);
-    FD_SET(socket_fd, &socket_fd_set);
+    fd_set listener_set;
+    FD_ZERO(&listener_set);
+    FD_SET(listener, &listener_set);
     while (1) {
         fputs("Waiting for connections on socket...\n", stdout);
-        select(socket_fd + 1, &socket_fd_set, NULL, NULL, NULL);
+        if (select(listener + 1, &listener_set, NULL, NULL, NULL) == -1) {
+            fprintf(stderr, "serial: ERROR: select() failed (%s)\n",
+                strerror(errno));
+            abort();
+        }
+        int client = accept(listener, NULL, 0);
+        if (client == -1) {
+            fprintf(stderr, "serial: ERROR: accept() failed (%s)\n",
+                strerror(errno));
+            abort();
+        }
+        printf("Client fd = %d\n", client);
+        clients[num_clients++] = client;
     }
 }

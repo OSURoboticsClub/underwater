@@ -2,4 +2,8 @@
 
 set -o errexit
 
-gcc -std=c99 -Wall -Wextra -Wno-unused-parameter -pedantic serial.c -lrt -o serial
+CFLAGS='-std=c99 -Wall -Wextra -Wno-unused-parameter'
+CFLAGS+=' -Wno-missing-field-initializers -pedantic -g'
+
+gcc $CFLAGS serial.c -lrt -o serial
+gcc $CFLAGS test.c -o test
