@@ -26,9 +26,17 @@ void send_message(union sigval sv)
     fputs("Pretending to send message...\n", stdout);
     for (int i = 0; i <= num_clients - 1; ++i) {
         if (send(clients[i], ".", 1, MSG_NOSIGNAL) != 1) {
-            fprintf(stderr, "serial: ERROR: Could not notify client %d (%s)\n",
-                i, strerror(errno));
-            abort();
+            if (errno == EPIPE) {
+                printf("Client %d disappeared.\n", i);
+                for (int j = i; j <= num_clients - 2; ++j)
+                    clients[j] = clients[j + 1];
+                --num_clients;
+            } else {
+                fprintf(stderr,
+                    "serial: ERROR: Could not notify client %d (%s)\n", i,
+                    strerror(errno));
+                abort();
+            }
         }
     }
 }
