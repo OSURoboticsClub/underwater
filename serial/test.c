@@ -9,6 +9,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "data.h"
+
 
 int main()
 {
@@ -23,45 +25,21 @@ int main()
         return 1;
     };
 
-    //sleep(1);
-
-    char controlbuf[1000];
-    struct msghdr mh = {
-        .msg_name = NULL,
-        .msg_namelen = 0,
-        .msg_iov = NULL,
-        .msg_iovlen = 0,
-        .msg_control = controlbuf,
-        .msg_controllen = sizeof(controlbuf),
-        .msg_flags = 0
-    };
-    ssize_t received = recvmsg(server, &mh, 0);
-    if (received == -1) {
-        fprintf(stderr, "test: ERROR: recvmsg() failed (%s)\n",
-            strerror(errno));
-        return 1;
-    }
-    printf("%d bytes of ancillary data received\n", (int)received);
-    printf("Length of control message buffer is %d\n", (int)mh.msg_controllen);
-    assert(mh.msg_controllen == sizeof(controlbuf));
-
-    struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    int a = *(int*)CMSG_DATA(cmh);
-    close(a);
-
-    char buf;
+    struct data data;
     while (1) {
-        ssize_t received = recv(server, &buf, 1, 0);
+        ssize_t received = recv(server, &data, sizeof(data), 0);
         if (received == -1) {
             fprintf(stderr, "test: ERROR: recv() failed (%s)\n",
                 strerror(errno));
             return 1;
-        }
-        if (received != 1) {
-            fputs("Server disappeared.\n", stdout);
+        } else if (received == 0) {
+            fputs("Server disappeared\n", stdout);
             return 0;
+        } else if ((size_t)received < sizeof(data)) {
+            fprintf(stderr, "test: ERROR: Received only %zu of %zu bytes\n",
+                (size_t)received, sizeof(data));
+            continue;
         }
-        putchar(buf);
-        putchar('\n');
+        fputs("Received message\n", stdout);
     }
 }

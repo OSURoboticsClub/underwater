@@ -13,35 +13,43 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "data.h"
+
 
 #define SOCKET_FILENAME "socket"
-#define MAX_CLIENTS 8
 
 
-int clients[MAX_CLIENTS];
-int num_clients = 0;
+int thing;  // Python program that does things
 
 
-void send_message(union sigval sv)
+void communicate(union sigval sv)
 {
-    fputs("Pretending to send message...\n", stdout);
-    /*for (int i = 0; i <= num_clients - 1; ++i) {*/
-        /*char msg[2];*/
-        /*snprintf(msg, 2, "%d", i);*/
-        /*if (send(clients[i], &msg, 1, MSG_NOSIGNAL) != 1) {*/
-            /*if (errno == EPIPE) {*/
-                /*printf("Client %d disappeared.\n", i);*/
-                /*for (int j = i; j <= num_clients - 2; ++j)*/
-                    /*clients[j] = clients[j + 1];*/
-                /*--num_clients;*/
-            /*} else {*/
-                /*fprintf(stderr,*/
-                    /*"serial: ERROR: Could not notify client %d (%s)\n", i,*/
-                    /*strerror(errno));*/
-                /*abort();*/
-            /*}*/
-        /*}*/
-    /*}*/
+    fputs("Pretending to send message to Arduino...\n", stdout);
+    fputs("Pretending to receive message from Arduino...\n", stdout);
+
+    struct data data = {
+        .a = 6000,
+        .b = 12345,
+        .c = 196,
+        .d = 3.14159,
+        .e = 1234567
+    };
+    ssize_t sent = send(thing, &data, sizeof(data), MSG_NOSIGNAL);
+    if (sent == -1) {
+        if (errno == EPIPE) {
+            fputs("serial: ERROR: Thing disappeared.\n", stdout);
+            abort();
+        } else {
+            fprintf(stderr,
+                "serial: ERROR: Could not communicate with thing (%s)\n",
+                strerror(errno));
+            abort();
+        }
+    } else if ((size_t)sent < sizeof(data)) {
+        fprintf(stderr, "serial: ERROR: Sent only %zu of %zu bytes to thing\n",
+            (size_t)sent, sizeof(data));
+        abort();
+    }
 }
 
 
@@ -65,7 +73,7 @@ int init_socket()
         return -1;
     }
 
-    if (listen(listener, MAX_CLIENTS) == -1) {
+    if (listen(listener, 1) == -1) {
         fprintf(stderr, "serial: ERROR: Could not listen on socket (%s)\n",
             strerror(errno));
         return -1;
@@ -80,7 +88,7 @@ int init_timer()
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
         .sigev_value.sival_int = 0,
-        .sigev_notify_function = send_message,
+        .sigev_notify_function = communicate,
         .sigev_notify_attributes = NULL
     };
     timer_t timerid;
@@ -110,38 +118,10 @@ void die(int signum)
 }
 
 
-int send_fd(int socket, int fd)
-{
-    char controlbuf[CMSG_LEN(sizeof(int))];
-    struct msghdr mh = {
-        .msg_name = NULL,
-        .msg_namelen = 0,
-        .msg_iov = NULL,
-        .msg_iovlen = 0,
-        .msg_control = controlbuf,
-        .msg_controllen = sizeof(controlbuf),
-        .msg_flags = 0
-    };
-    struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    cmh->cmsg_len = CMSG_LEN(sizeof(int));
-    cmh->cmsg_level = SOL_SOCKET;
-    cmh->cmsg_type = SCM_RIGHTS;
-    *(int*)CMSG_DATA(cmh) = fd;
-    ssize_t sent = sendmsg(socket, &mh, 0);
-    if (sent == -1) {
-        fprintf(stderr, "serial: ERROR: sendmsg() failed (%s)\n",
-            strerror(errno));
-        return -1;
-    }
-
-    printf("%d bytes of ancillary data sent\n", (int)sent);
-
-    return 0;
-}
-
-
 int main()
 {
+    fputs("Initializing...\n", stdout);
+
     if (signal(SIGABRT, die) == SIG_ERR) {
         fprintf(stderr,
             "serial: ERROR: Could not set up SIGABRT handler (%s)\n",
@@ -149,49 +129,37 @@ int main()
         exit(1);
     }
 
-    fputs("Initializing...\n", stdout);
+    if (signal(SIGINT, die) == SIG_ERR || signal(SIGQUIT, die) == SIG_ERR) {
+        fprintf(stderr,
+            "serial: ERROR: Could not set up signal handlers (%s)\n",
+            strerror(errno));
+        abort();
+    }
 
     int listener = init_socket();
     if (listener == -1)
         abort();
 
-    if (signal(SIGINT, die) == SIG_ERR || signal(SIGQUIT, die) == SIG_ERR) {
-        fprintf(stderr,
-            "serial: ERROR: Could not set up signal handler (%s)\n",
+    fd_set listener_set;
+    FD_ZERO(&listener_set);
+    FD_SET(listener, &listener_set);
+
+    fputs("Waiting for connection on socket...\n", stdout);
+    if (select(listener + 1, &listener_set, NULL, NULL, NULL) == -1) {
+        fprintf(stderr, "serial: ERROR: select() failed (%s)\n",
             strerror(errno));
         abort();
     }
+    thing = accept(listener, NULL, 0);
+    if (thing == -1) {
+        fprintf(stderr, "serial: ERROR: accept() failed (%s)\n",
+            strerror(errno));
+        abort();
+    }
+    fputs("Accepted connection from thing\n", stdout);
 
     if (init_timer() == -1)
         abort();
 
-    fd_set listener_set;
-    FD_ZERO(&listener_set);
-    FD_SET(listener, &listener_set);
-    int a = open("a", O_WRONLY | O_CREAT, 0777);
-    if (a == -1) {
-        fprintf(stderr, "serial: ERROR: Couldn't open \"a\" (%s)\n",
-            strerror(errno));
-        abort();
-    }
-    while (1) {
-        fputs("Waiting for connections on socket...\n", stdout);
-        if (select(listener + 1, &listener_set, NULL, NULL, NULL) == -1) {
-            fprintf(stderr, "serial: ERROR: select() failed (%s)\n",
-                strerror(errno));
-            abort();
-        }
-        int client = accept(listener, NULL, 0);
-        if (client == -1) {
-            fprintf(stderr, "serial: ERROR: accept() failed (%s)\n",
-                strerror(errno));
-            abort();
-        }
-        printf("Accepted client %d\n", num_clients);
-
-        if (send_fd(client, a) == -1)
-            abort();
-
-        clients[num_clients++] = client;
-    }
+    pause();
 }
