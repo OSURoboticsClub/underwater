@@ -25,23 +25,23 @@ int num_clients = 0;
 void send_message(union sigval sv)
 {
     fputs("Pretending to send message...\n", stdout);
-    for (int i = 0; i <= num_clients - 1; ++i) {
-        char msg[2];
-        snprintf(msg, 2, "%d", i);
-        if (send(clients[i], &msg, 1, MSG_NOSIGNAL) != 1) {
-            if (errno == EPIPE) {
-                printf("Client %d disappeared.\n", i);
-                for (int j = i; j <= num_clients - 2; ++j)
-                    clients[j] = clients[j + 1];
-                --num_clients;
-            } else {
-                fprintf(stderr,
-                    "serial: ERROR: Could not notify client %d (%s)\n", i,
-                    strerror(errno));
-                abort();
-            }
-        }
-    }
+    /*for (int i = 0; i <= num_clients - 1; ++i) {*/
+        /*char msg[2];*/
+        /*snprintf(msg, 2, "%d", i);*/
+        /*if (send(clients[i], &msg, 1, MSG_NOSIGNAL) != 1) {*/
+            /*if (errno == EPIPE) {*/
+                /*printf("Client %d disappeared.\n", i);*/
+                /*for (int j = i; j <= num_clients - 2; ++j)*/
+                    /*clients[j] = clients[j + 1];*/
+                /*--num_clients;*/
+            /*} else {*/
+                /*fprintf(stderr,*/
+                    /*"serial: ERROR: Could not notify client %d (%s)\n", i,*/
+                    /*strerror(errno));*/
+                /*abort();*/
+            /*}*/
+        /*}*/
+    /*}*/
 }
 
 
@@ -110,6 +110,36 @@ void die(int signum)
 }
 
 
+int send_fd(int socket, int fd)
+{
+    char controlbuf[CMSG_LEN(sizeof(int))];
+    struct msghdr mh = {
+        .msg_name = NULL,
+        .msg_namelen = 0,
+        .msg_iov = NULL,
+        .msg_iovlen = 0,
+        .msg_control = controlbuf,
+        .msg_controllen = sizeof(controlbuf),
+        .msg_flags = 0
+    };
+    struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+    cmh->cmsg_len = CMSG_LEN(sizeof(int));
+    cmh->cmsg_level = SOL_SOCKET;
+    cmh->cmsg_type = SCM_RIGHTS;
+    *(int*)CMSG_DATA(cmh) = fd;
+    ssize_t sent = sendmsg(socket, &mh, 0);
+    if (sent == -1) {
+        fprintf(stderr, "serial: ERROR: sendmsg() failed (%s)\n",
+            strerror(errno));
+        return -1;
+    }
+
+    printf("%d bytes of ancillary data sent\n", (int)sent);
+
+    return 0;
+}
+
+
 int main()
 {
     if (signal(SIGABRT, die) == SIG_ERR) {
@@ -157,32 +187,11 @@ int main()
                 strerror(errno));
             abort();
         }
-
-        char controlbuf[CMSG_SPACE(sizeof(int))];
-        struct msghdr mh = {
-            .msg_name = NULL,
-            .msg_namelen = 0,
-            .msg_iov = NULL,
-            .msg_iovlen = 0,
-            .msg_control = controlbuf,
-            .msg_controllen = sizeof(controlbuf),
-            .msg_flags = 0
-        };
-        struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-        cmh->cmsg_len = CMSG_LEN(sizeof(int));
-        cmh->cmsg_level = SOL_SOCKET;
-        cmh->cmsg_type = SCM_RIGHTS;
-        *(int*)CMSG_DATA(cmh) = a;
-        mh.msg_controllen = cmh->cmsg_len;
-        ssize_t sent = sendmsg(client, &mh, 0);
-        if (sent == -1) {
-            fprintf(stderr, "serial: ERROR: sendmsg() failed (%s)\n",
-                strerror(errno));
-            abort();
-        }
-        printf("Sent %d bytes of ancillary data\n", (int)sent);
-
         printf("Accepted client %d\n", num_clients);
+
+        if (send_fd(client, a) == -1)
+            abort();
+
         clients[num_clients++] = client;
     }
 }
