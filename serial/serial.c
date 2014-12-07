@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -137,6 +138,12 @@ int main()
     fd_set listener_set;
     FD_ZERO(&listener_set);
     FD_SET(listener, &listener_set);
+    int a = open("a", O_WRONLY | O_CREAT, 0777);
+    if (a == -1) {
+        fprintf(stderr, "serial: ERROR: Couldn't open \"a\" (%s)\n",
+            strerror(errno));
+        abort();
+    }
     while (1) {
         fputs("Waiting for connections on socket...\n", stdout);
         if (select(listener + 1, &listener_set, NULL, NULL, NULL) == -1) {
@@ -150,7 +157,32 @@ int main()
                 strerror(errno));
             abort();
         }
-        printf("Client fd = %d\n", client);
+
+        char controlbuf[CMSG_SPACE(sizeof(int))];
+        struct msghdr mh = {
+            .msg_name = NULL,
+            .msg_namelen = 0,
+            .msg_iov = NULL,
+            .msg_iovlen = 0,
+            .msg_control = controlbuf,
+            .msg_controllen = sizeof(controlbuf),
+            .msg_flags = 0
+        };
+        struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+        cmh->cmsg_len = CMSG_LEN(sizeof(int));
+        cmh->cmsg_level = SOL_SOCKET;
+        cmh->cmsg_type = SCM_RIGHTS;
+        *(int*)CMSG_DATA(cmh) = a;
+        mh.msg_controllen = cmh->cmsg_len;
+        ssize_t sent = sendmsg(client, &mh, 0);
+        if (sent == -1) {
+            fprintf(stderr, "serial: ERROR: sendmsg() failed (%s)\n",
+                strerror(errno));
+            abort();
+        }
+        printf("Sent %d bytes of ancillary data\n", (int)sent);
+
+        printf("Accepted client %d\n", num_clients);
         clients[num_clients++] = client;
     }
 }
