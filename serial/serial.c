@@ -21,16 +21,17 @@
 
 void communicate(union sigval sv)
 {
-    fputs("Pretending to send message to Arduino...\n", stdout);
-    fputs("Pretending to receive message from Arduino...\n", stdout);
+    fputs("serial --> Arduino (fake)\n", stdout);
+    fputs("serial <-- Arduino (fake)\n", stdout);
 
-    struct data data = {
+    struct sensor_data data = {
         .a = 6000,
         .b = 12345,
         .c = 196,
         .d = 3.14159,
         .e = 1234567
     };
+    fputs("serial --> thing\n", stdout);
     ssize_t sent = send(sv.sival_int, &data, sizeof(data), MSG_NOSIGNAL);
     if (sent == -1) {
         if (errno == EPIPE) {

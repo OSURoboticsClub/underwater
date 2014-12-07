@@ -25,7 +25,7 @@ int main()
         return 1;
     };
 
-    struct data data;
+    struct sensor_data data;
     while (1) {
         ssize_t received = recv(server, &data, sizeof(data), 0);
         if (received == -1) {
@@ -40,6 +40,6 @@ int main()
                 (size_t)received, sizeof(data));
             continue;
         }
-        fputs("Received message\n", stdout);
+        fputs("thing <-- serial\n", stdout);
     }
 }
