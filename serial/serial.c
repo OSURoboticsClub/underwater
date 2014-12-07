@@ -19,9 +19,6 @@
 #define SOCKET_FILENAME "socket"
 
 
-int thing;  // Python program that does things
-
-
 void communicate(union sigval sv)
 {
     fputs("Pretending to send message to Arduino...\n", stdout);
@@ -34,7 +31,7 @@ void communicate(union sigval sv)
         .d = 3.14159,
         .e = 1234567
     };
-    ssize_t sent = send(thing, &data, sizeof(data), MSG_NOSIGNAL);
+    ssize_t sent = send(sv.sival_int, &data, sizeof(data), MSG_NOSIGNAL);
     if (sent == -1) {
         if (errno == EPIPE) {
             fputs("serial: ERROR: Thing disappeared.\n", stdout);
@@ -83,11 +80,11 @@ int init_socket()
 }
 
 
-int init_timer()
+int init_timer(int thing)
 {
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
-        .sigev_value.sival_int = 0,
+        .sigev_value.sival_int = thing,
         .sigev_notify_function = communicate,
         .sigev_notify_attributes = NULL
     };
@@ -150,7 +147,7 @@ int main()
             strerror(errno));
         abort();
     }
-    thing = accept(listener, NULL, 0);
+    int thing = accept(listener, NULL, 0);
     if (thing == -1) {
         fprintf(stderr, "serial: ERROR: accept() failed (%s)\n",
             strerror(errno));
@@ -158,7 +155,7 @@ int main()
     }
     fputs("Accepted connection from thing\n", stdout);
 
-    if (init_timer() == -1)
+    if (init_timer(thing) == -1)
         abort();
 
     pause();
