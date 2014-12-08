@@ -29,6 +29,7 @@ void communicate(union sigval sv)
         }
         fprintf(stderr, "serial: ERROR: Could not lock mutex (%s)\n",
             strerror(errno));
+        abort();
     }
 
     fputs("serial --> Arduino (fake) ...\n", stdout);
