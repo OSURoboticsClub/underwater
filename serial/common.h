@@ -4,6 +4,9 @@
 #include <stdint.h>
 
 
+#define SOCKET_FILENAME "socket"
+
+
 struct sensor_data {
     uint16_t a;
     uint16_t b;

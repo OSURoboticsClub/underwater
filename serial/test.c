@@ -9,12 +9,12 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "data.h"
+#include "common.h"
 
 
 int main()
 {
-    int server = socket(AF_UNIX, SOCK_STREAM, 0);
+    int server = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     struct sockaddr_un sa;
     sa.sun_family = AF_UNIX;
     strcpy(sa.sun_path, "socket");

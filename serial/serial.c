@@ -13,10 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "data.h"
-
-
-#define SOCKET_FILENAME "socket"
+#include "common.h"
 
 
 void communicate(union sigval sv)
@@ -53,7 +50,7 @@ void communicate(union sigval sv)
 
 int init_socket()
 {
-    int listener = socket(AF_UNIX, SOCK_STREAM, 0);
+    int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1) {
         fprintf(stderr, "serial: ERROR: Could not create socket (%s)\n",
             strerror(errno));
@@ -77,15 +74,25 @@ int init_socket()
         return -1;
     }
 
-    return listener;
+    fputs("Waiting for socket connection...\n", stdout);
+    socklen_t socklen = sizeof(sa);
+    int s = accept(listener, (struct sockaddr*)&sa, &socklen);
+    if (s == -1) {
+        fprintf(stderr,
+            "serial: ERROR: Could not accept connection on socket (%s)\n",
+            strerror(errno));
+        return -1;
+    }
+
+    return s;
 }
 
 
-int init_timer(int thing)
+int init_timer(int s)
 {
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
-        .sigev_value.sival_int = thing,
+        .sigev_value.sival_int = s,
         .sigev_notify_function = communicate,
         .sigev_notify_attributes = NULL
     };
@@ -134,29 +141,11 @@ int main()
         abort();
     }
 
-    int listener = init_socket();
-    if (listener == -1)
+    int s = init_socket();
+    if (s == -1)
         abort();
 
-    fd_set listener_set;
-    FD_ZERO(&listener_set);
-    FD_SET(listener, &listener_set);
-
-    fputs("Waiting for connection on socket...\n", stdout);
-    if (select(listener + 1, &listener_set, NULL, NULL, NULL) == -1) {
-        fprintf(stderr, "serial: ERROR: select() failed (%s)\n",
-            strerror(errno));
-        abort();
-    }
-    int thing = accept(listener, NULL, 0);
-    if (thing == -1) {
-        fprintf(stderr, "serial: ERROR: accept() failed (%s)\n",
-            strerror(errno));
-        abort();
-    }
-    fputs("Accepted connection from thing\n", stdout);
-
-    if (init_timer(thing) == -1)
+    if (init_timer(s) == -1)
         abort();
 
     pause();
