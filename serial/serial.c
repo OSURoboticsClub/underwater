@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,8 +16,21 @@
 #include "common.h"
 
 
+static pthread_mutex_t mutex;
+
+
 void communicate(union sigval sv)
 {
+    int mutex_status = pthread_mutex_trylock(&mutex);
+    if (mutex_status != 0) {
+        if (mutex_status == EBUSY) {
+            fputs("serial: ERROR: Thing took too long to repond\n", stderr);
+            abort();
+        }
+        fprintf(stderr, "serial: ERROR: Could not lock mutex (%s)\n",
+            strerror(errno));
+    }
+
     fputs("serial --> Arduino (fake) ...\n", stdout);
     fputs("serial <-- Arduino (fake) ...\n", stdout);
 
@@ -63,6 +77,8 @@ void communicate(union sigval sv)
         abort();
     }
     print_thruster_data(&thruster_data);
+
+    pthread_mutex_unlock(&mutex);
 }
 
 
@@ -160,6 +176,8 @@ int main()
     int s = init_socket();
     if (s == -1)
         abort();
+
+    pthread_mutex_init(&mutex, NULL);
 
     if (init_timer(s) == -1)
         abort();

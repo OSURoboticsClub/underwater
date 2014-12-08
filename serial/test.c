@@ -25,6 +25,7 @@ int main()
         return 1;
     };
 
+    int i = 0;
     struct sensor_data sensor_data;
     struct thruster_data thruster_data;
     while (1) {
@@ -43,6 +44,9 @@ int main()
             return 1;
         }
         print_sensor_data(&sensor_data);
+
+        if (i++ == 4)
+            sleep(3);
 
         fputs("thing --> serial ...\n", stdout);
         thruster_data.ls = 20;
