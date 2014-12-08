@@ -135,7 +135,6 @@ int init_timer(int s)
 
 void die(int signum)
 {
-    assert(signum == SIGINT || signum == SIGQUIT || signum == SIGABRT);
     unlink(SOCKET_FILENAME);  // Ignore errors.
     fputs("serial: Dying...\n", stderr);
     exit(2);
