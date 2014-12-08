@@ -18,8 +18,8 @@
 
 void communicate(union sigval sv)
 {
-    fputs("serial --> Arduino (fake)\n", stdout);
-    fputs("serial <-- Arduino (fake)\n", stdout);
+    fputs("serial --> Arduino (fake) ...\n", stdout);
+    fputs("serial <-- Arduino (fake) ...\n", stdout);
 
     struct sensor_data data = {
         .a = 6000,
@@ -28,7 +28,7 @@ void communicate(union sigval sv)
         .d = 3.14159,
         .e = 1234567
     };
-    fputs("serial --> thing\n", stdout);
+    fputs("serial --> thing ...\n", stdout);
     ssize_t sent = send(sv.sival_int, &data, sizeof(data), MSG_NOSIGNAL);
     if (sent == -1) {
         if (errno == EPIPE) {
@@ -45,6 +45,7 @@ void communicate(union sigval sv)
             (size_t)sent, sizeof(data));
         abort();
     }
+    print_sensor_data(&data);
 }
 
 

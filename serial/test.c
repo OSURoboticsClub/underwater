@@ -27,6 +27,7 @@ int main()
 
     struct sensor_data data;
     while (1) {
+        fputs("thing <-- serial ...\n", stdout);
         ssize_t received = recv(server, &data, sizeof(data), 0);
         if (received == -1) {
             fprintf(stderr, "test: ERROR: recv() failed (%s)\n",
@@ -40,6 +41,6 @@ int main()
                 (size_t)received, sizeof(data));
             continue;
         }
-        fputs("thing <-- serial\n", stdout);
+        print_sensor_data(&data);
     }
 }
