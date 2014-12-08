@@ -21,31 +21,49 @@ void communicate(union sigval sv)
     fputs("serial --> Arduino (fake) ...\n", stdout);
     fputs("serial <-- Arduino (fake) ...\n", stdout);
 
-    struct sensor_data data = {
+    fputs("serial --> thing ...\n", stdout);
+    struct sensor_data sensor_data = {
         .a = 6000,
         .b = 12345,
         .c = 196,
         .d = 3.14159,
         .e = 1234567
     };
-    fputs("serial --> thing ...\n", stdout);
-    ssize_t sent = send(sv.sival_int, &data, sizeof(data), MSG_NOSIGNAL);
-    if (sent == -1) {
+    ssize_t count = send(sv.sival_int, &sensor_data, sizeof(sensor_data),
+        MSG_NOSIGNAL);
+    if (count == -1) {
         if (errno == EPIPE) {
-            fputs("serial: ERROR: Thing disappeared.\n", stdout);
-            abort();
-        } else {
-            fprintf(stderr,
-                "serial: ERROR: Could not communicate with thing (%s)\n",
-                strerror(errno));
+            fputs("serial: ERROR: Thing disappeared.\n", stderr);
             abort();
         }
-    } else if ((size_t)sent < sizeof(data)) {
+        fprintf(stderr,
+            "serial: ERROR: Could not communicate with thing (%s)\n",
+            strerror(errno));
+        abort();
+    } else if ((size_t)count < sizeof(sensor_data)) {
         fprintf(stderr, "serial: ERROR: Sent only %zu of %zu bytes to thing\n",
-            (size_t)sent, sizeof(data));
+            (size_t)count, sizeof(sensor_data));
         abort();
     }
-    print_sensor_data(&data);
+    print_sensor_data(&sensor_data);
+
+    fputs("serial <-- thing ...\n", stdout);
+    struct thruster_data thruster_data;
+    count = recv(sv.sival_int, &thruster_data, sizeof(thruster_data),
+        0);
+    if (count == -1) {
+        fprintf(stderr, "serial: ERROR: recv() failed (%s)\n",
+            strerror(errno));
+        abort();
+    } else if (count == 0) {
+        fputs("serial: ERROR: Thing disappeared.\n", stderr);
+        abort();
+    } else if ((size_t)count < sizeof(thruster_data)) {
+        fprintf(stderr, "serial: ERROR: Received only %zu of %zu bytes\n",
+            (size_t)count, sizeof(thruster_data));
+        abort();
+    }
+    print_thruster_data(&thruster_data);
 }
 
 
