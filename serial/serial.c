@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200112L
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -80,8 +79,7 @@ int init_socket()
     sa.sun_family = AF_UNIX;
     strcpy(sa.sun_path, SOCKET_FILENAME);
     unlink(SOCKET_FILENAME);
-    if (bind(listener, (struct sockaddr*)&sa, sizeof(sa))
-            == -1) {
+    if (bind(listener, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
         fprintf(stderr, "serial: ERROR: Could not bind socket (%s)\n",
             strerror(errno));
         return -1;
