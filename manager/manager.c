@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200112L
 
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -24,11 +25,10 @@ void communicate(union sigval sv)
     int mutex_status = pthread_mutex_trylock(&mutex);
     if (mutex_status != 0) {
         if (mutex_status == EBUSY) {
-            fputs("manager: ERROR: Thing took too long to repond\n", stderr);
+            warnx("Thing took too long to respond");
             abort();
         }
-        fprintf(stderr, "manager: ERROR: Could not lock mutex (%s)\n",
-            strerror(errno));
+        warnx("Could not lock mutex");
         abort();
     }
 
@@ -47,17 +47,14 @@ void communicate(union sigval sv)
         MSG_NOSIGNAL);
     if (count == -1) {
         if (errno == EPIPE) {
-            fputs("manager: ERROR: Thing disappeared.\n", stderr);
+            warnx("Thing disappeared");
             abort();
         }
-        fprintf(stderr,
-            "manager: ERROR: Could not communicate with thing (%s)\n",
-            strerror(errno));
+        warn("Could not communicate with thing");
         abort();
     } else if ((size_t)count < sizeof(sensor_data)) {
-        fprintf(stderr,
-            "manager: ERROR: Sent only %zu of %zu bytes to thing\n",
-            (size_t)count, sizeof(sensor_data));
+        warnx("Sent only %zu of %zu bytes to thing", (size_t)count,
+            sizeof(sensor_data));
         abort();
     }
     print_sensor_data(&sensor_data);
@@ -67,15 +64,14 @@ void communicate(union sigval sv)
     count = recv(sv.sival_int, &thruster_data, sizeof(thruster_data),
         0);
     if (count == -1) {
-        fprintf(stderr, "manager: ERROR: recv() failed (%s)\n",
-            strerror(errno));
+        warn("recv() failed");
         abort();
     } else if (count == 0) {
-        fputs("manager: ERROR: Thing disappeared.\n", stderr);
+        warnx("Thing disappeared");
         abort();
     } else if ((size_t)count < sizeof(thruster_data)) {
-        fprintf(stderr, "manager: ERROR: Received only %zu of %zu bytes\n",
-            (size_t)count, sizeof(thruster_data));
+        warnx("Received only %zu of %zu bytes", (size_t)count,
+            sizeof(thruster_data));
         abort();
     }
     print_thruster_data(&thruster_data);
@@ -88,8 +84,7 @@ int init_socket()
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1) {
-        fprintf(stderr, "manager: ERROR: Could not create socket (%s)\n",
-            strerror(errno));
+        warn("Could not create socket");
         return -1;
     }
 
@@ -98,14 +93,12 @@ int init_socket()
     strcpy(sa.sun_path, SOCKET_FILENAME);
     unlink(SOCKET_FILENAME);
     if (bind(listener, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
-        fprintf(stderr, "manager: ERROR: Could not bind socket (%s)\n",
-            strerror(errno));
+        warn("Could not bind socket");
         return -1;
     }
 
     if (listen(listener, 1) == -1) {
-        fprintf(stderr, "manager: ERROR: Could not listen on socket (%s)\n",
-            strerror(errno));
+        warn("Could not listen on socket");
         return -1;
     }
 
@@ -113,9 +106,17 @@ int init_socket()
     socklen_t socklen = sizeof(sa);
     int s = accept(listener, (struct sockaddr*)&sa, &socklen);
     if (s == -1) {
-        fprintf(stderr,
-            "manager: ERROR: Could not accept connection on socket (%s)\n",
-            strerror(errno));
+        warn("Could not accept connection on listener socket");
+        return -1;
+    }
+
+    if (close(listener) == -1) {
+        warn("Could not close listener socket");
+        return -1;
+    }
+
+    if (unlink(SOCKET_FILENAME) == -1) {
+        warn("Could not remove listener socket file");
         return -1;
     }
 
@@ -133,8 +134,7 @@ int init_timer(int s)
     };
     timer_t timerid;
     if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1) {
-        fprintf(stderr, "manager: ERROR: Could not create timer (%s)\n",
-            strerror(errno));
+        warn("Could not create timer");
         return -1;
     }
 
@@ -152,7 +152,7 @@ int init_timer(int s)
 void die(int signum)
 {
     unlink(SOCKET_FILENAME);  // Ignore errors.
-    fputs("manager: Dying...\n", stderr);
+    warnx("Dying...");
     exit(2);
 }
 
@@ -162,16 +162,12 @@ int main()
     fputs("Initializing...\n", stdout);
 
     if (signal(SIGABRT, die) == SIG_ERR) {
-        fprintf(stderr,
-            "manager: ERROR: Could not set up SIGABRT handler (%s)\n",
-            strerror(errno));
-        exit(1);
+        warn("Could not set up SIGABRT handler");
+        return 1;
     }
 
     if (signal(SIGINT, die) == SIG_ERR || signal(SIGQUIT, die) == SIG_ERR) {
-        fprintf(stderr,
-            "manager: ERROR: Could not set up signal handlers (%s)\n",
-            strerror(errno));
+        warn("Could not set up signal handlers");
         abort();
     }
 

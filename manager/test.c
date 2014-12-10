@@ -1,6 +1,7 @@
 //#define _POSIX_C_SOURCE 200112L
 
 #include <assert.h>
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -20,10 +21,11 @@ int main()
     strcpy(sa.sun_path, "socket");
 
     if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
-        fprintf(stderr, "test: ERROR: Could not connect to socket (%s)\n",
-            strerror(errno));
+        warn("Could not connect to socket");
         return 1;
     };
+
+    fputs("Connected to socket.\n", stdout);
 
     int i = 0;
     struct sensor_data sensor_data;
@@ -32,15 +34,14 @@ int main()
         fputs("thing <-- manager ...\n", stdout);
         ssize_t count = recv(s, &sensor_data, sizeof(sensor_data), 0);
         if (count == -1) {
-            fprintf(stderr, "test: ERROR: recv() failed (%s)\n",
-                strerror(errno));
+            warn("recv() failed");
             return 1;
         } else if (count == 0) {
-            fputs("Socket disappeared\n", stdout);
+            warnx("Socket disappeared");
             return 0;
         } else if ((size_t)count < sizeof(sensor_data)) {
-            fprintf(stderr, "test: ERROR: Received only %zu of %zu bytes\n",
-                (size_t)count, sizeof(sensor_data));
+            warnx("Received only %zu of %zu bytes", (size_t)count,
+                sizeof(sensor_data));
             return 1;
         }
         print_sensor_data(&sensor_data);
@@ -59,15 +60,14 @@ int main()
             MSG_NOSIGNAL);
         if (count == -1) {
             if (errno == EPIPE) {
-                fputs("Socket disappeared\n", stdout);
+                warnx("Socket disappeared");
                 return 0;
             }
-            fprintf(stderr, "test: ERROR: send() failed (%s)\n",
-                strerror(errno));
+            warn("send() failed");
             return 1;
         } else if ((size_t)count < sizeof(thruster_data)) {
-            fprintf(stderr, "test: ERROR: Sent only %zu of %zu bytes\n",
-                (size_t)count, sizeof(thruster_data));
+            warnx("Sent only %zu of %zu bytes", (size_t)count,
+                sizeof(thruster_data));
             return 1;
         }
         print_thruster_data(&thruster_data);
