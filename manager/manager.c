@@ -167,7 +167,10 @@ int main()
             .sa_flags = 0,
             .sa_restorer = NULL
         };
-        sigemptyset(&act.sa_mask);
+        if (sigemptyset(&act.sa_mask) == -1) {
+            warn("Couldn't empty sa_mask");
+            return 1;
+        }
 
         if (sigaction(SIGABRT, &act, NULL) == -1) {
             warn("Could not set up SIGABRT handler");
