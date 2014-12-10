@@ -13,8 +13,10 @@
 #include "common.h"
 
 
-int main()
+int init_socket(int* mem)
 {
+    fputs("Connecting to socket...\n", stdout);
+
     int s = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     struct sockaddr_un sa;
     sa.sun_family = AF_UNIX;
@@ -22,10 +24,54 @@ int main()
 
     if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
         warn("Can't connect to socket");
-        return 1;
+        return -1;
     };
+    /*
+     *int passcred = 1;
+     *int passcred_len = sizeof(passcred);
+     *if (setsockopt(s, SOL_SOCKET, SO_PASSCRED, &passcred, passcred_len)
+     *        == -1) {
+     *    warn("Can't enable SO_PASSCRED");
+     *    return -1;
+     *}
+     */
 
-    fputs("Connected to socket.\n", stdout);
+    fputs("Receiving shared memory object...\n", stdout);
+
+    char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
+    struct msghdr mh = {
+        .msg_name = NULL,
+        .msg_namelen = 0,
+        .msg_iov = NULL,
+        .msg_iovlen = 0,
+        .msg_control = control,
+        .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
+        .msg_flags = 0
+    };
+    if (recvmsg(s, &mh, 0) == -1) {
+        warn("Can't recvmsg() shared memory object");
+        return -1;
+    }
+    struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+    *mem = *(int*)CMSG_DATA(cmh);
+
+    return s;
+}
+
+
+int main()
+{
+    int mem;
+    int s = init_socket(&mem);
+    if (s == -1)
+        return 1;
+    if (write(mem, "hello", 5) == -1) {
+        warn("Can't write() to shared memory object");
+        return 1;
+    }
+    if (close(mem) == -1) {
+        warn("Can't close shared memory object");
+    }
 
     int i = 0;
     struct sensor_data sensor_data;

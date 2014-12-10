@@ -80,7 +80,7 @@ void communicate(union sigval sv)
 }
 
 
-int init_socket()
+int init_socket(int mem)
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1) {
@@ -119,6 +119,27 @@ int init_socket()
         warn("Can't remove listener socket file");
         return -1;
     }
+
+    char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
+    struct msghdr mh = {
+        .msg_name = NULL,
+        .msg_namelen = 0,
+        .msg_iov = NULL,
+        .msg_iovlen = 0,
+        .msg_control = control,
+        .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
+        .msg_flags = 0
+    };
+    struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+    cmh->cmsg_len = CMSG_LEN(sizeof(int));
+    cmh->cmsg_level = SOL_SOCKET;
+    cmh->cmsg_type = SCM_RIGHTS;
+    *CMSG_DATA(cmh) = mem;
+    ssize_t count = sendmsg(s, &mh, 0);
+    if (count == -1) {
+        warn("Can't sendmsg() shared memory object");
+        return -1;
+    };
 
     return s;
 }
@@ -184,7 +205,8 @@ int main()
         }
     }
 
-    int s = init_socket();
+    int mem = open("testfile", O_WRONLY | O_CREAT, 0664);
+    int s = init_socket(mem);
     if (s == -1)
         abort();
 
