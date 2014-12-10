@@ -28,7 +28,7 @@ void communicate(union sigval sv)
             warnx("Thing took too long to respond");
             abort();
         }
-        warnx("Could not lock mutex");
+        warnx("Can't lock mutex");
         abort();
     }
 
@@ -50,7 +50,7 @@ void communicate(union sigval sv)
             warnx("Thing disappeared");
             abort();
         }
-        warn("Could not communicate with thing");
+        warn("Can't communicate with thing");
         abort();
     } else if ((size_t)count < sizeof(sensor_data)) {
         warnx("Sent only %zu of %zu bytes to thing", (size_t)count,
@@ -84,7 +84,7 @@ int init_socket()
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1) {
-        warn("Could not create socket");
+        warn("Can't create socket");
         return -1;
     }
 
@@ -93,12 +93,12 @@ int init_socket()
     strcpy(sa.sun_path, SOCKET_FILENAME);
     unlink(SOCKET_FILENAME);
     if (bind(listener, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
-        warn("Could not bind socket");
+        warn("Can't bind socket");
         return -1;
     }
 
     if (listen(listener, 1) == -1) {
-        warn("Could not listen on socket");
+        warn("Can't listen on socket");
         return -1;
     }
 
@@ -106,17 +106,17 @@ int init_socket()
     socklen_t socklen = sizeof(sa);
     int s = accept(listener, (struct sockaddr*)&sa, &socklen);
     if (s == -1) {
-        warn("Could not accept connection on listener socket");
+        warn("Can't accept connection on listener socket");
         return -1;
     }
 
     if (close(listener) == -1) {
-        warn("Could not close listener socket");
+        warn("Can't close listener socket");
         return -1;
     }
 
     if (unlink(SOCKET_FILENAME) == -1) {
-        warn("Could not remove listener socket file");
+        warn("Can't remove listener socket file");
         return -1;
     }
 
@@ -134,7 +134,7 @@ int init_timer(int s)
     };
     timer_t timerid;
     if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1) {
-        warn("Could not create timer");
+        warn("Can't create timer");
         return -1;
     }
 
@@ -168,18 +168,18 @@ int main()
             .sa_restorer = NULL
         };
         if (sigemptyset(&act.sa_mask) == -1) {
-            warn("Couldn't empty sa_mask");
+            warn("Can't empty sa_mask");
             return 1;
         }
 
         if (sigaction(SIGABRT, &act, NULL) == -1) {
-            warn("Could not set up SIGABRT handler");
+            warn("Can't set up SIGABRT handler");
             return 1;
         }
 
         if (sigaction(SIGINT, &act, NULL) == -1
                 || sigaction(SIGQUIT, &act, NULL) == -1) {
-            warn("Could not set up signal handlers");
+            warn("Can't set up signal handlers");
             abort();
         }
     }

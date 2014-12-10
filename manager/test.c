@@ -21,7 +21,7 @@ int main()
     strcpy(sa.sun_path, "socket");
 
     if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
-        warn("Could not connect to socket");
+        warn("Can't connect to socket");
         return 1;
     };
 
