@@ -29,7 +29,7 @@ int main()
     struct sensor_data sensor_data;
     struct thruster_data thruster_data;
     while (1) {
-        fputs("thing <-- serial ...\n", stdout);
+        fputs("thing <-- manager ...\n", stdout);
         ssize_t count = recv(s, &sensor_data, sizeof(sensor_data), 0);
         if (count == -1) {
             fprintf(stderr, "test: ERROR: recv() failed (%s)\n",
@@ -48,7 +48,7 @@ int main()
         if (i++ == 4)
             sleep(3);
 
-        fputs("thing --> serial ...\n", stdout);
+        fputs("thing --> manager ...\n", stdout);
         thruster_data.ls = 20;
         thruster_data.rs = 20;
         thruster_data.fl = 800;
@@ -66,7 +66,7 @@ int main()
                 strerror(errno));
             return 1;
         } else if ((size_t)count < sizeof(thruster_data)) {
-            fprintf(stderr, "serial: ERROR: Sent only %zu of %zu bytes\n",
+            fprintf(stderr, "test: ERROR: Sent only %zu of %zu bytes\n",
                 (size_t)count, sizeof(thruster_data));
             return 1;
         }
