@@ -161,14 +161,24 @@ int main()
 {
     fputs("Initializing...\n", stdout);
 
-    if (signal(SIGABRT, die) == SIG_ERR) {
-        warn("Could not set up SIGABRT handler");
-        return 1;
-    }
+    {
+        struct sigaction act = {
+            .sa_handler = die,
+            .sa_flags = 0,
+            .sa_restorer = NULL
+        };
+        sigemptyset(&act.sa_mask);
 
-    if (signal(SIGINT, die) == SIG_ERR || signal(SIGQUIT, die) == SIG_ERR) {
-        warn("Could not set up signal handlers");
-        abort();
+        if (sigaction(SIGABRT, &act, NULL) == -1) {
+            warn("Could not set up SIGABRT handler");
+            return 1;
+        }
+
+        if (sigaction(SIGINT, &act, NULL) == -1
+                || sigaction(SIGQUIT, &act, NULL) == -1) {
+            warn("Could not set up signal handlers");
+            abort();
+        }
     }
 
     int s = init_socket();
