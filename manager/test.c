@@ -26,15 +26,6 @@ int init_socket(int* mem)
         warn("Can't connect to socket");
         return -1;
     };
-    /*
-     *int passcred = 1;
-     *int passcred_len = sizeof(passcred);
-     *if (setsockopt(s, SOL_SOCKET, SO_PASSCRED, &passcred, passcred_len)
-     *        == -1) {
-     *    warn("Can't enable SO_PASSCRED");
-     *    return -1;
-     *}
-     */
 
     fputs("Receiving shared memory object...\n", stdout);
 
