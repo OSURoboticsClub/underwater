@@ -21,6 +21,9 @@
 static pthread_mutex_t mutex;
 
 
+struct state* state;
+
+
 void communicate(union sigval sv)
 {
     int mutex_status = pthread_mutex_trylock(&mutex);
@@ -37,14 +40,13 @@ void communicate(union sigval sv)
     fputs("manager <-- Arduino (fake) ...\n", stdout);
 
     fputs("manager --> thing ...\n", stdout);
-    struct sensor_data sensor_data = {
-        .a = 6000,
-        .b = 12345,
-        .c = 196,
-        .d = 3.14159,
-        .e = 1234567
-    };
-    ssize_t count = send(sv.sival_int, &sensor_data, sizeof(sensor_data),
+    state->sensor_data.a = 6000;
+    state->sensor_data.b = 12345;
+    state->sensor_data.c = 196;
+    state->sensor_data.d = 3.14159;
+    state->sensor_data.e = 1234567;
+    char ready = 1;
+    ssize_t count = send(sv.sival_int, &ready, sizeof(ready),
         MSG_NOSIGNAL);
     if (count == -1) {
         if (errno == EPIPE) {
@@ -53,31 +55,34 @@ void communicate(union sigval sv)
         }
         warn("Can't communicate with thing");
         abort();
-    } else if ((size_t)count < sizeof(sensor_data)) {
+    } else if ((size_t)count < sizeof(ready)) {
         warnx("Sent only %zu of %zu bytes to thing", (size_t)count,
-            sizeof(sensor_data));
+            sizeof(ready));
         abort();
     }
     fputs("    ", stdout);
-    print_sensor_data(&sensor_data);
+    print_sensor_data(&state->sensor_data);
 
     fputs("manager <-- thing ...\n", stdout);
-    struct thruster_data thruster_data;
-    count = recv(sv.sival_int, &thruster_data, sizeof(thruster_data),
-        0);
+    count = recv(sv.sival_int, &ready, sizeof(ready), 0);
     if (count == -1) {
         warn("recv() failed");
         abort();
     } else if (count == 0) {
         warnx("Thing disappeared");
         abort();
-    } else if ((size_t)count < sizeof(thruster_data)) {
+    } else if ((size_t)count < sizeof(ready)) {
         warnx("Received only %zu of %zu bytes", (size_t)count,
-            sizeof(thruster_data));
+            sizeof(ready));
+        abort();
+    } else if (ready != 1) {
+        warnx("ready isn't 1");
         abort();
     }
+
     fputs("    ", stdout);
-    print_thruster_data(&thruster_data);
+    print_thruster_data(&state->thruster_data);
+
     putchar('\n');
 
     pthread_mutex_unlock(&mutex);
@@ -222,7 +227,7 @@ int main()
         warn("Can't set size of shared memory object");
         abort();
     }
-    struct state* state = mmap(NULL, sizeof(struct state),
+    state = mmap(NULL, sizeof(struct state),
         PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
     if (state == NULL) {
         warn("Can't mmap() shared memory object");

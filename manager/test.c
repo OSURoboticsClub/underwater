@@ -14,6 +14,9 @@
 #include "common.h"
 
 
+struct state* state;
+
+
 int init_socket(int* mem)
 {
     fputs("Connecting to socket...\n", stdout);
@@ -58,7 +61,7 @@ int main()
     if (s == -1)
         return 1;
 
-    struct state* state = mmap(NULL, sizeof(struct state),
+    state = mmap(NULL, sizeof(struct state),
         PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
     if (state == NULL) {
         warn("Can't mmap() shared memory object");
@@ -66,36 +69,41 @@ int main()
     }
 
     int i = 0;
-    struct sensor_data sensor_data;
-    struct thruster_data thruster_data;
+    char ready;
     while (1) {
         fputs("thing <-- manager ...\n", stdout);
-        ssize_t count = recv(s, &sensor_data, sizeof(sensor_data), 0);
+        ssize_t count = recv(s, &ready, sizeof(ready), 0);
         if (count == -1) {
             warn("recv() failed");
             return 1;
         } else if (count == 0) {
             warnx("Socket disappeared");
             return 0;
-        } else if ((size_t)count < sizeof(sensor_data)) {
+        } else if ((size_t)count < sizeof(ready)) {
             warnx("Received only %zu of %zu bytes", (size_t)count,
-                sizeof(sensor_data));
+                sizeof(ready));
+            return 1;
+        } else if (ready != 1) {
+            warnx("ready isn't 1");
             return 1;
         }
+
         fputs("    ", stdout);
-        print_sensor_data(&sensor_data);
+        print_sensor_data(&state->sensor_data);
 
         if (i++ == 4)
             sleep(3);
 
         fputs("thing --> manager ...\n", stdout);
-        thruster_data.ls = 20;
-        thruster_data.rs = 20;
-        thruster_data.fl = 800;
-        thruster_data.fr = 300;
-        thruster_data.bl = 800;
-        thruster_data.br = 300;
-        count = send(s, &thruster_data, sizeof(thruster_data),
+        state->thruster_data.ls = 20;
+        state->thruster_data.rs = 20;
+        state->thruster_data.fl = 800;
+        state->thruster_data.fr = 300;
+        state->thruster_data.bl = 800;
+        state->thruster_data.br = 300;
+
+        ready = 1;
+        count = send(s, &ready, sizeof(ready),
             MSG_NOSIGNAL);
         if (count == -1) {
             if (errno == EPIPE) {
@@ -104,13 +112,14 @@ int main()
             }
             warn("send() failed");
             return 1;
-        } else if ((size_t)count < sizeof(thruster_data)) {
-            warnx("Sent only %zu of %zu bytes", (size_t)count,
-                sizeof(thruster_data));
+        } else if ((size_t)count < sizeof(ready)) {
+            warnx("Sent only %zu of %zu bytes", (size_t)count, sizeof(ready));
             return 1;
         }
+
         fputs("    ", stdout);
-        print_thruster_data(&thruster_data);
+        print_thruster_data(&state->thruster_data);
+
         putchar('\n');
     }
 }
