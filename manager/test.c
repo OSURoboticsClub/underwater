@@ -81,6 +81,7 @@ int main()
                 sizeof(sensor_data));
             return 1;
         }
+        fputs("    ", stdout);
         print_sensor_data(&sensor_data);
 
         if (i++ == 4)
@@ -107,6 +108,8 @@ int main()
                 sizeof(thruster_data));
             return 1;
         }
+        fputs("    ", stdout);
         print_thruster_data(&thruster_data);
+        putchar('\n');
     }
 }

@@ -57,6 +57,7 @@ void communicate(union sigval sv)
             sizeof(sensor_data));
         abort();
     }
+    fputs("    ", stdout);
     print_sensor_data(&sensor_data);
 
     fputs("manager <-- thing ...\n", stdout);
@@ -74,7 +75,9 @@ void communicate(union sigval sv)
             sizeof(thruster_data));
         abort();
     }
+    fputs("    ", stdout);
     print_thruster_data(&thruster_data);
+    putchar('\n');
 
     pthread_mutex_unlock(&mutex);
 }
