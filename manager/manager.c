@@ -40,11 +40,11 @@ void communicate(union sigval sv)
     fputs("manager <-- Arduino (fake) ...\n", stdout);
 
     fputs("manager --> thing ...\n", stdout);
-    state->sensor_data.a = 6000;
-    state->sensor_data.b = 12345;
-    state->sensor_data.c = 196;
-    state->sensor_data.d = 3.14159;
-    state->sensor_data.e = 1234567;
+    ++state->sensor_data.a;
+    ++state->sensor_data.b;
+    ++state->sensor_data.c;
+    ++state->sensor_data.d;
+    ++state->sensor_data.e;
     char ready = 1;
     ssize_t count = send(sv.sival_int, &ready, sizeof(ready),
         MSG_NOSIGNAL);
@@ -233,6 +233,12 @@ int main()
         warn("Can't mmap() shared memory object");
         abort();
     }
+
+    state->sensor_data.a = 6000;
+    state->sensor_data.b = 12345;
+    state->sensor_data.c = 196;
+    state->sensor_data.d = 3.14159;
+    state->sensor_data.e = 1234567;
 
     int s = init_socket(mem);
     if (s == -1)

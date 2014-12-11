@@ -68,6 +68,13 @@ int main()
         return 1;
     }
 
+    state->thruster_data.ls = 20;
+    state->thruster_data.rs = 20;
+    state->thruster_data.fl = 800;
+    state->thruster_data.fr = 300;
+    state->thruster_data.bl = 800;
+    state->thruster_data.br = 300;
+
     int i = 0;
     char ready;
     while (1) {
@@ -95,13 +102,12 @@ int main()
             sleep(3);
 
         fputs("thing --> manager ...\n", stdout);
-        state->thruster_data.ls = 20;
-        state->thruster_data.rs = 20;
-        state->thruster_data.fl = 800;
-        state->thruster_data.fr = 300;
-        state->thruster_data.bl = 800;
-        state->thruster_data.br = 300;
-
+        ++state->thruster_data.ls;
+        ++state->thruster_data.rs;
+        ++state->thruster_data.fl;
+        ++state->thruster_data.fr;
+        ++state->thruster_data.bl;
+        ++state->thruster_data.br;
         ready = 1;
         count = send(s, &ready, sizeof(ready),
             MSG_NOSIGNAL);
