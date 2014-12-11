@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -208,7 +209,26 @@ int main()
         }
     }
 
-    int mem = open("testfile", O_WRONLY | O_CREAT, 0664);
+    int mem = shm_open("/robot", O_RDWR | O_CREAT, 0);
+    if (mem == -1) {
+        warn("Can't open shared memory object");
+        abort();
+    }
+    if (shm_unlink("/robot") == -1) {
+        warn("Can't unlink shared memory object");
+        abort();
+    }
+    if (ftruncate(mem, sizeof(struct state)) == -1) {
+        warn("Can't set size of shared memory object");
+        abort();
+    }
+    struct state* state = mmap(NULL, sizeof(struct state),
+        PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
+    if (state == NULL) {
+        warn("Can't mmap() shared memory object");
+        abort();
+    }
+
     int s = init_socket(mem);
     if (s == -1)
         abort();

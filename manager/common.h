@@ -27,6 +27,12 @@ struct thruster_data {
 };
 
 
+struct state {
+    struct sensor_data sensor_data;
+    struct thruster_data thruster_data;
+};
+
+
 inline static void print_sensor_data(struct sensor_data* data)
 {
     printf("%"PRIu16"  %"PRIu16"  %"PRIu8"  %f  %"PRIu32"\n",

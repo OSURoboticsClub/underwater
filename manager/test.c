@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -56,12 +57,12 @@ int main()
     int s = init_socket(&mem);
     if (s == -1)
         return 1;
-    if (write(mem, "hello", 5) == -1) {
-        warn("Can't write() to shared memory object");
+
+    struct state* state = mmap(NULL, sizeof(struct state),
+        PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
+    if (state == NULL) {
+        warn("Can't mmap() shared memory object");
         return 1;
-    }
-    if (close(mem) == -1) {
-        warn("Can't close shared memory object");
     }
 
     int i = 0;
