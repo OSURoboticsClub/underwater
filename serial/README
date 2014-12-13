@@ -1,0 +1,33 @@
+got this code from:
+http://www.tldp.org/HOWTO/Serial-Programming-HOWTO/x115.html
+
+This is just a POC, the code is directly copied form the site and is under this:
+http://tldp.org/COPYRIGHT.html
+
+I will rewrite my own code after studying this code and we can use the rewritten code instead.
+
+it's hard coded to get input from /dev/ttyUSB0, you'll need to go in and change that for other file names
+Also it's hard coded to do 9600 baud rate, that's defined at the top as well. There's a 'B' before the number 9600, but just leave it there.
+
+to run it just do:
+$ make
+# ./a.out
+(note permissions)
+
+You'll need some arduino hooked up and sending in serial for anything to happen. This code only reads input, but if you read the termios manual or that page at the top, it should be pretty easy to send data as well.
+
+Here's some example arduino code that can be used to test this program:
+void setup()
+{
+  pinMode(4, INPUT);
+  Serial.begin(9600);
+}
+
+void loop()
+{
+  if (digitalRead(4) == HIGH)
+  {
+    Serial.print('b');
+  }
+}
+I had to run the arduino IDE with root priviledges to get it to upload correctly. This code works on my arduino because I bridge the 4 pin to vcc, you might need to modify it to get it to work for your setup.
