@@ -81,9 +81,20 @@ int main()
             warn("Can't lock worker mutex");
             return 1;
         }
-        while (state->worker_misses[0] == 0)
-            pthread_cond_wait(&state->worker_conds[0],
-                &state->worker_mutexes[0]); // Never fails.
+        struct timespec now;
+        if (clock_gettime(CLOCK_MONOTONIC, &now) == -1) {
+            warn("Can't get current time");
+            return 1;
+        }
+        now.tv_sec += 3;
+        while (state->worker_misses[0] == 0) {
+            if (pthread_cond_timedwait(&state->worker_conds[0],
+                    &state->worker_mutexes[0], &now) == ETIMEDOUT
+                    && getppid() == 1) {
+                warn("Manager died");
+                return 1;
+            }
+        }
         state->worker_misses[0] = 0;
         if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
             warn("Can't unlock worker mutex");

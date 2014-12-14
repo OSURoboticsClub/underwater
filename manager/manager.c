@@ -209,8 +209,7 @@ int main()
     {
         struct sigaction act = {
             .sa_handler = die,
-            .sa_flags = 0,
-            .sa_restorer = NULL
+            .sa_flags = 0
         };
         if (sigemptyset(&act.sa_mask) == -1) {
             warn("Can't empty sa_mask");
