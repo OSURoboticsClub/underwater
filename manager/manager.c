@@ -1,11 +1,9 @@
-#define _POSIX_C_SOURCE 200112L
+#include "common.h"
 
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -15,12 +13,15 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "common.h"
+
+
+struct worker {
+    int sock;
+    int pid;
+};
 
 
 static pthread_mutex_t mutex;
-
-
 struct state* state;
 
 
@@ -32,7 +33,7 @@ void communicate(union sigval sv)
             warnx("Thing took too long to respond");
             abort();
         }
-        warnx("Can't lock mutex");
+        warnx("Can't lock communicate() mutex");
         abort();
     }
 
@@ -45,9 +46,17 @@ void communicate(union sigval sv)
     ++state->sensor_data.c;
     ++state->sensor_data.d;
     ++state->sensor_data.e;
+
+    /*if (pthread_mutex_lock(&state->thing_mutex) == -1) {*/
+        /*warn("Can't lock thing mutex");*/
+        /*abort();*/
+    /*}*/
+    /*++state->thing_missed*/
+
+    struct worker* workers = sv.sival_ptr;
+
     char ready = 1;
-    ssize_t count = send(sv.sival_int, &ready, sizeof(ready),
-        MSG_NOSIGNAL);
+    ssize_t count = send(workers[0].sock, &ready, sizeof(ready), MSG_NOSIGNAL);
     if (count == -1) {
         if (errno == EPIPE) {
             warnx("Thing disappeared");
@@ -64,7 +73,7 @@ void communicate(union sigval sv)
     print_sensor_data(&state->sensor_data);
 
     fputs("manager <-- thing ...\n", stdout);
-    count = recv(sv.sival_int, &ready, sizeof(ready), 0);
+    count = recv(workers[0].sock, &ready, sizeof(ready), 0);
     if (count == -1) {
         warn("recv() failed");
         abort();
@@ -89,7 +98,7 @@ void communicate(union sigval sv)
 }
 
 
-int init_socket(int mem)
+int init_socket(struct worker worker[], int mem)
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1) {
@@ -113,8 +122,8 @@ int init_socket(int mem)
 
     fputs("Waiting for socket connection...\n", stdout);
     socklen_t socklen = sizeof(sa);
-    int s = accept(listener, (struct sockaddr*)&sa, &socklen);
-    if (s == -1) {
+    worker[0].sock = accept(listener, (struct sockaddr*)&sa, &socklen);
+    if (worker[0].sock == -1) {
         warn("Can't accept connection on listener socket");
         return -1;
     }
@@ -128,6 +137,15 @@ int init_socket(int mem)
         warn("Can't remove listener socket file");
         return -1;
     }
+
+    struct ucred cred;
+    socklen_t cred_len = sizeof(cred);
+    if (getsockopt(worker[0].sock, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
+            == -1) {
+        warn("Can't get credentials");
+        return -1;
+    }
+    worker[0].pid = cred.pid;
 
     char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
     struct msghdr mh = {
@@ -144,21 +162,21 @@ int init_socket(int mem)
     cmh->cmsg_level = SOL_SOCKET;
     cmh->cmsg_type = SCM_RIGHTS;
     *CMSG_DATA(cmh) = mem;
-    ssize_t count = sendmsg(s, &mh, 0);
+    ssize_t count = sendmsg(worker[0].sock, &mh, 0);
     if (count == -1) {
         warn("Can't sendmsg() shared memory object");
         return -1;
     };
 
-    return s;
+    return 0;
 }
 
 
-int init_timer(int s)
+int init_timer(struct worker workers[])
 {
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
-        .sigev_value.sival_int = s,
+        .sigev_value.sival_ptr = workers,
         .sigev_notify_function = communicate,
         .sigev_notify_attributes = NULL
     };
@@ -240,13 +258,14 @@ int main()
     state->sensor_data.d = 3.14159;
     state->sensor_data.e = 1234567;
 
-    int s = init_socket(mem);
-    if (s == -1)
+    struct worker workers[1];
+
+    if (init_socket(workers, mem) == -1)
         abort();
 
     pthread_mutex_init(&mutex, NULL);
 
-    if (init_timer(s) == -1)
+    if (init_timer(workers) == -1)
         abort();
 
     pause();

@@ -1,8 +1,12 @@
 #pragma once
 
+#define _POSIX_C_SOURCE 200112L
+#define _GNU_SOURCE
 
 #include <inttypes.h>
+#include <pthread.h>
 #include <stdint.h>
+#include <stdio.h>
 
 
 #define SOCKET_FILENAME "socket"
@@ -30,6 +34,9 @@ struct thruster_data {
 struct state {
     struct sensor_data sensor_data;
     struct thruster_data thruster_data;
+
+    pthread_mutex_t thing_mutex;
+    int thing_missed;
 };
 
 
