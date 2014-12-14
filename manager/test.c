@@ -78,7 +78,7 @@ int main()
         fputs("worker <-- manager ...\n", stdout);
 
         if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
-            warn("Can't lock worker mutex");
+            warnx("Can't lock worker mutex");
             return 1;
         }
         while (state->worker_misses[0] == 0) {
@@ -89,7 +89,7 @@ int main()
         }
         state->worker_misses[0] = 0;
         if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
-            warn("Can't unlock worker mutex");
+            warnx("Can't unlock worker mutex");
             return 1;
         }
 
