@@ -35,8 +35,8 @@ struct state {
     struct sensor_data sensor_data;
     struct thruster_data thruster_data;
 
-    pthread_mutex_t thing_mutex;
-    int thing_missed;
+    pthread_mutex_t worker_mutexes[1];
+    int worker_misses[1];
 };
 
 

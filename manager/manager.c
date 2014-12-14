@@ -14,7 +14,6 @@
 #include <unistd.h>
 
 
-
 struct worker {
     int sock;
     int pid;
@@ -47,11 +46,19 @@ void communicate(union sigval sv)
     ++state->sensor_data.d;
     ++state->sensor_data.e;
 
-    /*if (pthread_mutex_lock(&state->thing_mutex) == -1) {*/
-        /*warn("Can't lock thing mutex");*/
-        /*abort();*/
-    /*}*/
-    /*++state->thing_missed*/
+    if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
+        warn("Can't lock worker mutex");
+        abort();
+    }
+    if (state->worker_misses[0] > 0) {
+        warnx("Thing is being slow");
+        abort();
+    }
+    ++state->worker_misses[0];
+    if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
+        warn("Can't release worker mutex");
+        abort();
+    }
 
     struct worker* workers = sv.sival_ptr;
 
@@ -167,6 +174,9 @@ int init_socket(struct worker worker[], int mem)
         warn("Can't sendmsg() shared memory object");
         return -1;
     };
+
+    pthread_mutex_init(&state->worker_mutexes[0], NULL);
+    state->worker_misses[0] = 0;
 
     return 0;
 }

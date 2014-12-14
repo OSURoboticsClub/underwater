@@ -95,11 +95,23 @@ int main()
             return 1;
         }
 
+        if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
+            warn("Can't lock worker mutex");
+            return 1;
+        }
+        state->worker_misses[0] = 0;
+        if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
+            warn("Can't unlock worker mutex");
+            return 1;
+        }
+
         fputs("    ", stdout);
         print_sensor_data(&state->sensor_data);
 
-        if (i++ == 4)
+        if (i++ == 4) {
+            fputs("Purposely being slow...\n", stdout);
             sleep(3);
+        }
 
         fputs("thing --> manager ...\n", stdout);
         ++state->thruster_data.ls;
