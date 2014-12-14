@@ -1,4 +1,4 @@
-//#define _POSIX_C_SOURCE 200112L
+#include "common.h"
 
 #include <assert.h>
 #include <err.h>
@@ -10,8 +10,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
-
-#include "common.h"
 
 
 struct state* state;
@@ -76,29 +74,16 @@ int main()
     state->thruster_data.br = 300;
 
     int i = 0;
-    char ready;
     while (1) {
-        fputs("thing <-- manager ...\n", stdout);
-        ssize_t count = recv(s, &ready, sizeof(ready), 0);
-        if (count == -1) {
-            warn("recv() failed");
-            return 1;
-        } else if (count == 0) {
-            warnx("Socket disappeared");
-            return 0;
-        } else if ((size_t)count < sizeof(ready)) {
-            warnx("Received only %zu of %zu bytes", (size_t)count,
-                sizeof(ready));
-            return 1;
-        } else if (ready != 1) {
-            warnx("ready isn't 1");
-            return 1;
-        }
+        fputs("worker <-- manager ...\n", stdout);
 
         if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
             warn("Can't lock worker mutex");
             return 1;
         }
+        while (state->worker_misses[0] == 0)
+            pthread_cond_wait(&state->worker_conds[0],
+                &state->worker_mutexes[0]); // Never fails.
         state->worker_misses[0] = 0;
         if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
             warn("Can't unlock worker mutex");
@@ -109,35 +94,15 @@ int main()
         print_sensor_data(&state->sensor_data);
 
         if (i++ == 4) {
-            fputs("Purposely being slow...\n", stdout);
-            sleep(3);
+            fputs("Purposely spinning...\n", stdout);
+            while (1) { __asm(""); }
         }
 
-        fputs("thing --> manager ...\n", stdout);
         ++state->thruster_data.ls;
         ++state->thruster_data.rs;
         ++state->thruster_data.fl;
         ++state->thruster_data.fr;
         ++state->thruster_data.bl;
         ++state->thruster_data.br;
-        ready = 1;
-        count = send(s, &ready, sizeof(ready),
-            MSG_NOSIGNAL);
-        if (count == -1) {
-            if (errno == EPIPE) {
-                warnx("Socket disappeared");
-                return 0;
-            }
-            warn("send() failed");
-            return 1;
-        } else if ((size_t)count < sizeof(ready)) {
-            warnx("Sent only %zu of %zu bytes", (size_t)count, sizeof(ready));
-            return 1;
-        }
-
-        fputs("    ", stdout);
-        print_thruster_data(&state->thruster_data);
-
-        putchar('\n');
     }
 }

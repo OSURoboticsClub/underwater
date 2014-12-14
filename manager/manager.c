@@ -20,26 +20,35 @@ struct worker {
 };
 
 
-static pthread_mutex_t mutex;
+static pthread_mutex_t arduino_mutex;
 struct state* state;
 
 
 void communicate(union sigval sv)
 {
-    int mutex_status = pthread_mutex_trylock(&mutex);
+    // Communicate with Arduino.
+
+    int mutex_status = pthread_mutex_trylock(&arduino_mutex);
     if (mutex_status != 0) {
         if (mutex_status == EBUSY) {
-            warnx("Thing took too long to respond");
+            warnx("Arduino is slow");
             abort();
         }
-        warnx("Can't lock communicate() mutex");
+        warnx("Can't lock Arduino mutex");
+        abort();
+    }
+    fputs("manager --> Arduino (fake) ...\n", stdout);
+    fputs("manager <-- Arduino (fake) ...\n", stdout);
+    if (pthread_mutex_unlock(&arduino_mutex) != 0) {
+        warnx("Can't unlock Arduino mutex");
         abort();
     }
 
-    fputs("manager --> Arduino (fake) ...\n", stdout);
-    fputs("manager <-- Arduino (fake) ...\n", stdout);
+    // Notify workers.
 
-    fputs("manager --> thing ...\n", stdout);
+    /*struct worker* workers = sv.sival_ptr;*/
+
+    fputs("manager --> worker ...\n", stdout);
     ++state->sensor_data.a;
     ++state->sensor_data.b;
     ++state->sensor_data.c;
@@ -47,61 +56,30 @@ void communicate(union sigval sv)
     ++state->sensor_data.e;
 
     if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
-        warn("Can't lock worker mutex");
+        warnx("Can't lock worker mutex");
         abort();
     }
-    if (state->worker_misses[0] > 0) {
-        warnx("Thing is being slow");
+    if (state->worker_misses[0] >= 4) {
+        warnx("Worker is too slow");
         abort();
+    } else if (state->worker_misses[0] > 0) {
+        warnx("Worker is slow (%d notifications not acked)",
+            state->worker_misses[0]);
     }
     ++state->worker_misses[0];
+    pthread_cond_signal(&state->worker_conds[0]);  // Never fails.
     if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
-        warn("Can't release worker mutex");
+        warnx("Can't release worker mutex");
         abort();
     }
 
-    struct worker* workers = sv.sival_ptr;
-
-    char ready = 1;
-    ssize_t count = send(workers[0].sock, &ready, sizeof(ready), MSG_NOSIGNAL);
-    if (count == -1) {
-        if (errno == EPIPE) {
-            warnx("Thing disappeared");
-            abort();
-        }
-        warn("Can't communicate with thing");
-        abort();
-    } else if ((size_t)count < sizeof(ready)) {
-        warnx("Sent only %zu of %zu bytes to thing", (size_t)count,
-            sizeof(ready));
-        abort();
-    }
     fputs("    ", stdout);
     print_sensor_data(&state->sensor_data);
-
-    fputs("manager <-- thing ...\n", stdout);
-    count = recv(workers[0].sock, &ready, sizeof(ready), 0);
-    if (count == -1) {
-        warn("recv() failed");
-        abort();
-    } else if (count == 0) {
-        warnx("Thing disappeared");
-        abort();
-    } else if ((size_t)count < sizeof(ready)) {
-        warnx("Received only %zu of %zu bytes", (size_t)count,
-            sizeof(ready));
-        abort();
-    } else if (ready != 1) {
-        warnx("ready isn't 1");
-        abort();
-    }
 
     fputs("    ", stdout);
     print_thruster_data(&state->thruster_data);
 
     putchar('\n');
-
-    pthread_mutex_unlock(&mutex);
 }
 
 
@@ -175,8 +153,10 @@ int init_socket(struct worker worker[], int mem)
         return -1;
     };
 
-    pthread_mutex_init(&state->worker_mutexes[0], NULL);
-    state->worker_misses[0] = 0;
+    pthread_mutex_init(&state->worker_mutexes[0], NULL);  // Always suceeds.
+    pthread_condattr_t attr;
+    pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+    pthread_cond_init(&state->worker_conds[0], &attr);  // Always succeeds.
 
     return 0;
 }
@@ -273,7 +253,7 @@ int main()
     if (init_socket(workers, mem) == -1)
         abort();
 
-    pthread_mutex_init(&mutex, NULL);
+    pthread_mutex_init(&arduino_mutex, NULL);
 
     if (init_timer(workers) == -1)
         abort();

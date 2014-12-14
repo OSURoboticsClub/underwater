@@ -36,6 +36,7 @@ struct state {
     struct thruster_data thruster_data;
 
     pthread_mutex_t worker_mutexes[1];
+    pthread_cond_t worker_conds[1];
     int worker_misses[1];
 };
 
