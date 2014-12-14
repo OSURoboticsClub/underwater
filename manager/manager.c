@@ -44,8 +44,21 @@ void communicate(union sigval sv)
         warnx("Can't lock Arduino mutex");
         abort();
     }
+
+    fputs("    ", stdout);
+    print_thruster_data(&state->thruster_data);
+
     fputs("manager --> Arduino (fake) ...\n", stdout);
     fputs("manager <-- Arduino (fake) ...\n", stdout);
+    ++state->sensor_data.a;
+    ++state->sensor_data.b;
+    ++state->sensor_data.c;
+    ++state->sensor_data.d;
+    ++state->sensor_data.e;
+
+    fputs("    ", stdout);
+    print_sensor_data(&state->sensor_data);
+
     if (pthread_mutex_unlock(&arduino_mutex) != 0) {
         warnx("Can't unlock Arduino mutex");
         abort();
@@ -56,11 +69,6 @@ void communicate(union sigval sv)
     /*struct worker* workers = sv.sival_ptr;*/
 
     fputs("manager --> worker ...\n", stdout);
-    ++state->sensor_data.a;
-    ++state->sensor_data.b;
-    ++state->sensor_data.c;
-    ++state->sensor_data.d;
-    ++state->sensor_data.e;
 
     if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
         warnx("Can't lock worker mutex");
@@ -79,12 +87,6 @@ void communicate(union sigval sv)
         warnx("Can't release worker mutex");
         abort();
     }
-
-    fputs("    ", stdout);
-    print_sensor_data(&state->sensor_data);
-
-    fputs("    ", stdout);
-    print_thruster_data(&state->thruster_data);
 
     putchar('\n');
 }
