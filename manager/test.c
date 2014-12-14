@@ -46,7 +46,7 @@ int init_socket(int* mem)
         return -1;
     }
     struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    *mem = *(int*)CMSG_DATA(cmh);
+    memcpy(mem, CMSG_DATA(cmh), sizeof(int));
 
     return s;
 }
