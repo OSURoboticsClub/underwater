@@ -161,9 +161,7 @@ int init_socket(struct worker worker[], int mem)
     };
 
     pthread_mutex_init(&state->worker_mutexes[0], NULL);  // Always suceeds.
-    pthread_condattr_t attr;
-    pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
-    pthread_cond_init(&state->worker_conds[0], &attr);  // Always succeeds.
+    pthread_cond_init(&state->worker_conds[0], NULL);  // Always succeeds.
 
     return 0;
 }
