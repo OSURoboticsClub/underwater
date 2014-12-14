@@ -14,6 +14,13 @@
 #include <unistd.h>
 
 
+struct ucred {
+    pid_t pid;
+    uid_t uid;
+    gid_t gid;
+};
+
+
 struct worker {
     int sock;
     int pid;
