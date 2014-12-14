@@ -186,8 +186,8 @@ int init_timer(struct worker workers[])
     struct itimerspec its;
     its.it_interval.tv_sec = 1;  // every second
     its.it_interval.tv_nsec = 0;
-    its.it_value.tv_sec = 1;  // arm timer
-    its.it_value.tv_nsec = 0;
+    its.it_value.tv_sec = 0;  // arm timer
+    its.it_value.tv_nsec = 1;
     timer_settime(timerid, 0, &its, NULL);
 
     return 0;
