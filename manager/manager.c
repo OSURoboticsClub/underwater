@@ -164,6 +164,7 @@ int init_socket(struct worker worker[], int mem)
 
     pthread_mutex_init(&state->worker_mutexes[0], NULL);  // Always suceeds.
     pthread_cond_init(&state->worker_conds[0], NULL);  // Always succeeds.
+    state->worker_misses[0] = 0;
 
     return 0;
 }
