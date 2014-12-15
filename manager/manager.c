@@ -162,8 +162,18 @@ int init_socket(struct worker worker[], int mem)
         return -1;
     };
 
-    pthread_mutex_init(&state->worker_mutexes[0], NULL);  // Always suceeds.
-    pthread_cond_init(&state->worker_conds[0], NULL);  // Always succeeds.
+    pthread_mutexattr_t ma;
+    pthread_mutexattr_init(&ma);
+    pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED);
+    pthread_mutex_init(&state->worker_mutexes[0], &ma);  // Always suceeds.
+    pthread_mutexattr_destroy(&ma);
+
+    pthread_condattr_t ca;
+    pthread_condattr_init(&ca);
+    pthread_condattr_setpshared(&ca, PTHREAD_PROCESS_SHARED);
+    pthread_cond_init(&state->worker_conds[0], &ca);  // Always succeeds.
+    pthread_condattr_destroy(&ca);
+
     state->worker_misses[0] = 0;
 
     return 0;
