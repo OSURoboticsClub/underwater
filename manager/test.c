@@ -17,8 +17,6 @@ struct state* state;
 
 int init_socket(int* mem)
 {
-    fputs("Connecting to socket...\n", stdout);
-
     int s = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     struct sockaddr_un sa;
     sa.sun_family = AF_UNIX;
@@ -28,8 +26,6 @@ int init_socket(int* mem)
         warn("Can't connect to socket");
         return -1;
     };
-
-    fputs("Receiving shared memory object...\n", stdout);
 
     char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
     struct msghdr mh = {
@@ -54,6 +50,8 @@ int init_socket(int* mem)
 
 int main()
 {
+    fputs("Connecting...\n", stdout);
+
     int mem;
     int s = init_socket(&mem);
     if (s == -1)
@@ -66,6 +64,8 @@ int main()
         return 1;
     }
 
+    fputs("Connected\n\n", stdout);
+
     state->thruster_data.ls = 20;
     state->thruster_data.rs = 20;
     state->thruster_data.fl = 800;
@@ -73,7 +73,6 @@ int main()
     state->thruster_data.bl = 800;
     state->thruster_data.br = 300;
 
-    int i = 0;
     while (1) {
         if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
             warnx("Can't lock worker mutex");
@@ -90,7 +89,8 @@ int main()
             warnx("Can't unlock worker mutex");
             return 1;
         }
-        fputs("<-- manager\n", stdout);
+        fputs("<-- manager    ", stdout);
+        print_sensor_data(&state->sensor_data);
 
         ++state->thruster_data.ls;
         ++state->thruster_data.rs;
@@ -98,13 +98,8 @@ int main()
         ++state->thruster_data.fr;
         ++state->thruster_data.bl;
         ++state->thruster_data.br;
-        fputs("--> manager", stdout);
-        fputs("    ", stdout);
-        print_sensor_data(&state->sensor_data);
-
-        if (i++ == 4) {
-            fputs("Purposely spinning...\n", stdout);
-            while (1) { __asm(""); }
-        }
+        fputs("--> manager    ", stdout);
+        print_thruster_data(&state->thruster_data);
+        fputs("\n", stdout);
     }
 }

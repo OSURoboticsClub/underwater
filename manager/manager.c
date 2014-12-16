@@ -112,7 +112,6 @@ int init_socket(struct worker worker[], int mem)
         return -1;
     }
 
-    fputs("Waiting for socket connection...\n", stdout);
     socklen_t socklen = sizeof(sa);
     worker[0].sock = accept(listener, (struct sockaddr*)&sa, &socklen);
     if (worker[0].sock == -1) {
@@ -265,6 +264,8 @@ int main()
 
     struct worker workers[1];
 
+    fputs("Waiting for workers...\n", stdout);
+
     if (init_socket(workers, mem) == -1)
         abort();
 
@@ -272,6 +273,8 @@ int main()
 
     if (init_timer(workers) == -1)
         abort();
+
+    fputs("Ready\n\n", stdout);
 
     pause();
 }
