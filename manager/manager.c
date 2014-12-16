@@ -80,11 +80,11 @@ void communicate(union sigval sv)
     }
     ++state->worker_misses[0];
     pthread_cond_signal(&state->worker_conds[0]);  // Never fails.
-    fputs("--> worker\n", stdout);
     if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
         warnx("Can't release worker mutex");
         abort();
     }
+    fputs("--> worker\n", stdout);
 
     putchar('\n');
 }

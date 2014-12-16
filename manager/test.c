@@ -86,11 +86,11 @@ int main()
             alarm(0);
         }
         state->worker_misses[0] = 0;
-        fputs("<-- manager\n", stdout);
         if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
             warnx("Can't unlock worker mutex");
             return 1;
         }
+        fputs("<-- manager\n", stdout);
 
         ++state->thruster_data.ls;
         ++state->thruster_data.rs;
