@@ -15,17 +15,15 @@
 struct state* state;
 
 
-int init_socket(int* mem)
+int init_socket()
 {
     int s = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     struct sockaddr_un sa;
     sa.sun_family = AF_UNIX;
     strcpy(sa.sun_path, "socket");
 
-    if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
-        warn("Can't connect to socket");
-        return -1;
-    };
+    if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1)
+        err(1, "Can't connect to socket");
 
     char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
     struct msghdr mh = {
@@ -37,14 +35,17 @@ int init_socket(int* mem)
         .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
         .msg_flags = 0
     };
-    if (recvmsg(s, &mh, 0) == -1) {
-        warn("Can't recvmsg() shared memory object");
-        return -1;
-    }
+    if (recvmsg(s, &mh, 0) == -1)
+        err(1, "Can't recvmsg() shared memory object");
     struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    memcpy(mem, CMSG_DATA(cmh), sizeof(int));
+    if (cmh == NULL)
+        errx(1, "No cmsghdr object received");
+    int mem;
+    memcpy(&mem, CMSG_DATA(cmh), sizeof(int));
 
-    return s;
+    close(s);
+
+    return mem;
 }
 
 
@@ -52,9 +53,8 @@ int main()
 {
     fputs("Connecting...\n", stdout);
 
-    int mem;
-    int s = init_socket(&mem);
-    if (s == -1)
+    int mem = init_socket();
+    if (mem == -1)
         return 1;
 
     state = mmap(NULL, sizeof(struct state),
@@ -64,14 +64,7 @@ int main()
         return 1;
     }
 
-    fputs("Connected\n\n", stdout);
-
-    state->thruster_data.ls = 20;
-    state->thruster_data.rs = 20;
-    state->thruster_data.fl = 800;
-    state->thruster_data.fr = 300;
-    state->thruster_data.bl = 800;
-    state->thruster_data.br = 300;
+    fputs("Ready\n\n", stdout);
 
     while (1) {
         if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
