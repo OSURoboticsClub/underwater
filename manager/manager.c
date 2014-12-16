@@ -40,9 +40,6 @@ void die()
 
 void communicate(union sigval sv)
 {
-    fputs("<-- worker    ", stdout);
-    print_thruster_data(&state->thruster_data);
-
     // Communicate with Arduino.
 
     if (pthread_mutex_lock(&state->thruster_data_mutex) != 0)
@@ -54,7 +51,11 @@ void communicate(union sigval sv)
         errx(1, "Can't lock Arduino mutex");
     }
 
-    fputs("--> Arduino (fake)\n", stdout);
+    fputs("<-- worker    ", stdout);
+    print_thruster_data(&state->thruster_data);
+
+    fputs("--> Arduino (fake)    ", stdout);
+    print_thruster_data(&state->thruster_data);
 
     ++state->sensor_data.a;
     ++state->sensor_data.b;
@@ -75,16 +76,21 @@ void communicate(union sigval sv)
 
     if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1)
         errx(1, "Can't lock worker mutex");
+
     if (state->worker_misses[0] >= 4)
         errx(1, "Worker is too slow");
     else if (state->worker_misses[0] > 0)
         warnx("Worker is slow (%d notifications not acked)",
             state->worker_misses[0]);
+
     ++state->worker_misses[0];
     pthread_cond_signal(&state->worker_conds[0]);  // Always succeeds.
+
+    fputs("--> worker    ", stdout);
+    print_sensor_data(&state->sensor_data);
+
     if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1)
         errx(1, "Can't release worker mutex");
-    fputs("--> worker\n", stdout);
 
     putchar('\n');
 }
