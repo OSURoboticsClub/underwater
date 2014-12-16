@@ -75,8 +75,6 @@ int main()
 
     int i = 0;
     while (1) {
-        fputs("worker <-- manager ...\n", stdout);
-
         if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
             warnx("Can't lock worker mutex");
             return 1;
@@ -88,17 +86,10 @@ int main()
             alarm(0);
         }
         state->worker_misses[0] = 0;
+        fputs("<-- manager\n", stdout);
         if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
             warnx("Can't unlock worker mutex");
             return 1;
-        }
-
-        fputs("    ", stdout);
-        print_sensor_data(&state->sensor_data);
-
-        if (i++ == 4) {
-            fputs("Purposely spinning...\n", stdout);
-            while (1) { __asm(""); }
         }
 
         ++state->thruster_data.ls;
@@ -107,5 +98,13 @@ int main()
         ++state->thruster_data.fr;
         ++state->thruster_data.bl;
         ++state->thruster_data.br;
+        fputs("--> manager", stdout);
+        fputs("    ", stdout);
+        print_sensor_data(&state->sensor_data);
+
+        if (i++ == 4) {
+            fputs("Purposely spinning...\n", stdout);
+            while (1) { __asm(""); }
+        }
     }
 }
