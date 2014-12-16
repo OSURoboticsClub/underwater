@@ -45,6 +45,8 @@ void communicate(union sigval sv)
 
     // Communicate with Arduino.
 
+    if (pthread_mutex_lock(&state->thruster_data_mutex) != 0)
+        errx(1, "Can't lock thruster data mutex");
     int mutex_status = pthread_mutex_trylock(&arduino_mutex);
     if (mutex_status != 0) {
         if (mutex_status == EBUSY)
@@ -64,6 +66,8 @@ void communicate(union sigval sv)
 
     if (pthread_mutex_unlock(&arduino_mutex) != 0)
         errx(1, "Can't unlock Arduino mutex");
+    if (pthread_mutex_unlock(&state->thruster_data_mutex) != 0)
+        errx(1, "Can't unlock thruster data mutex");
 
     // Notify workers.
 
@@ -121,13 +125,6 @@ int init_state()
     state->sensor_data.c = 196;
     state->sensor_data.d = 3.14159;
     state->sensor_data.e = 1234567;
-
-    state->thruster_data.ls = 20;
-    state->thruster_data.rs = 20;
-    state->thruster_data.fl = 800;
-    state->thruster_data.fr = 300;
-    state->thruster_data.bl = 800;
-    state->thruster_data.br = 300;
 
     pthread_mutexattr_t ma;
     if (pthread_mutexattr_init(&ma) != 0)

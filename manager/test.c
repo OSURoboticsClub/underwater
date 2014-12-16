@@ -12,9 +12,6 @@
 #include <unistd.h>
 
 
-struct state* state;
-
-
 int init_socket()
 {
     int s = socket(AF_UNIX, SOCK_SEQPACKET, 0);
@@ -57,20 +54,27 @@ int main()
     if (mem == -1)
         return 1;
 
-    state = mmap(NULL, sizeof(struct state),
+    struct state* state = mmap(NULL, sizeof(struct state),
         PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
-    if (state == NULL) {
-        warn("Can't mmap() shared memory object");
-        return 1;
-    }
+    if (state == NULL)
+        err(1, "Can't mmap() shared memory object");
+
+    if (pthread_mutex_lock(&state->thruster_data_mutex) == -1)
+        errx(1, "Can't lock thruster data mutex");
+    state->thruster_data.ls = 20;
+    state->thruster_data.rs = 20;
+    state->thruster_data.fl = 800;
+    state->thruster_data.fr = 300;
+    state->thruster_data.bl = 800;
+    state->thruster_data.br = 300;
+    if (pthread_mutex_unlock(&state->thruster_data_mutex) == -1)
+        errx(1, "Can't unlock thruster data mutex");
 
     fputs("Ready\n\n", stdout);
 
     while (1) {
-        if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1) {
-            warnx("Can't lock worker mutex");
-            return 1;
-        }
+        if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1)
+            errx(1, "Can't lock worker mutex");
         while (state->worker_misses[0] == 0) {
             alarm(5);
             pthread_cond_wait(&state->worker_conds[0],
@@ -78,21 +82,26 @@ int main()
             alarm(0);
         }
         state->worker_misses[0] = 0;
-        if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1) {
-            warnx("Can't unlock worker mutex");
-            return 1;
-        }
+        if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1)
+            errx(1, "Can't unlock worker mutex");
+
         fputs("<-- manager    ", stdout);
         print_sensor_data(&state->sensor_data);
 
+        if (pthread_mutex_lock(&state->thruster_data_mutex) == -1)
+            errx(1, "Can't lock thruster data mutex");
         ++state->thruster_data.ls;
         ++state->thruster_data.rs;
         ++state->thruster_data.fl;
         ++state->thruster_data.fr;
         ++state->thruster_data.bl;
         ++state->thruster_data.br;
+        if (pthread_mutex_unlock(&state->thruster_data_mutex) == -1)
+            errx(1, "Can't unlock thruster data mutex");
+
         fputs("--> manager    ", stdout);
         print_thruster_data(&state->thruster_data);
-        fputs("\n", stdout);
+
+        putchar('\n');
     }
 }
