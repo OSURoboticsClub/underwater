@@ -22,7 +22,6 @@ struct ucred {
 
 
 struct worker {
-    int sock;
     int pid;
 };
 
@@ -173,8 +172,8 @@ void init_socket(struct worker worker[], int mem)
         err(1, "Can't listen on socket");
 
     socklen_t socklen = sizeof(sa);
-    worker[0].sock = accept(listener, (struct sockaddr*)&sa, &socklen);
-    if (worker[0].sock == -1)
+    int s = accept(listener, (struct sockaddr*)&sa, &socklen);
+    if (s == -1)
         err(1, "Can't accept connection on listener socket");
 
     if (close(listener) == -1)
@@ -185,7 +184,7 @@ void init_socket(struct worker worker[], int mem)
 
     struct ucred cred;
     socklen_t cred_len = sizeof(cred);
-    if (getsockopt(worker[0].sock, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
+    if (getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
             == -1)
         err(1, "Can't get credentials");
     worker[0].pid = cred.pid;
@@ -205,9 +204,12 @@ void init_socket(struct worker worker[], int mem)
     cmh->cmsg_level = SOL_SOCKET;
     cmh->cmsg_type = SCM_RIGHTS;
     memcpy(CMSG_DATA(cmh), &mem, sizeof(int));
-    ssize_t count = sendmsg(worker[0].sock, &mh, 0);
+    ssize_t count = sendmsg(s, &mh, 0);
     if (count == -1)
         err(1, "Can't send shared memory object");
+
+    if (close(s) == -1)
+        err(1, "Can't close worker socket");
 }
 
 
