@@ -77,7 +77,7 @@ void communicate(union sigval sv)
         warnx("Worker is slow (%d notifications not acked)",
             state->worker_misses[0]);
     ++state->worker_misses[0];
-    pthread_cond_signal(&state->worker_conds[0]);  // Never fails.
+    pthread_cond_signal(&state->worker_conds[0]);  // Always succeeds.
     if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1)
         errx(1, "Can't release worker mutex");
     fputs("--> worker\n", stdout);
