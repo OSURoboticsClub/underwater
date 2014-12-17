@@ -10,5 +10,5 @@ struct robot {
 
 
 struct robot init();
-void wait_for_sensor_data(struct robot* robot);
+struct sensor_data wait_for_sensor_data(struct robot* robot);
 void set_thruster_data(struct robot* robot, struct thruster_data* td);

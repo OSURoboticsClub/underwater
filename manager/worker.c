@@ -54,7 +54,7 @@ struct robot init()
 }
 
 
-void wait_for_sensor_data(struct robot* robot)
+struct sensor_data wait_for_sensor_data(struct robot* robot)
 {
     if (pthread_mutex_lock(&robot->state->worker_mutexes[0]) == -1)
         errx(1, "Can't lock worker mutex");
@@ -70,8 +70,12 @@ void wait_for_sensor_data(struct robot* robot)
     fputs("<-- manager    ", stdout);
     print_sensor_data(&robot->state->sensor_data);
 
+    struct sensor_data sd = robot->state->sensor_data;
+
     if (pthread_mutex_unlock(&robot->state->worker_mutexes[0]) == -1)
         errx(1, "Can't unlock worker mutex");
+
+    return sd;
 }
 
 
