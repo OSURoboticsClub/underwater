@@ -155,7 +155,7 @@ int init_state()
 }
 
 
-void init_socket(struct worker worker[], int mem)
+void init_socket(struct worker workers[], int mem)
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1)
@@ -187,7 +187,7 @@ void init_socket(struct worker worker[], int mem)
     if (getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
             == -1)
         err(1, "Can't get credentials");
-    worker[0].pid = cred.pid;
+    workers[0].pid = cred.pid;
 
     char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
     struct msghdr mh = {
