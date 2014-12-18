@@ -32,17 +32,17 @@ struct ucred {
 
 
 static pthread_mutex_t arduino_mutex;
-struct state* state;
+static struct state* state;
 
 
-void die()
+static void die()
 {
     unlink(SOCKET_FILENAME);  // Ignore errors.
     warnx("Dying...");
 }
 
 
-void communicate(union sigval sv)
+static void communicate(union sigval sv)
 {
     // Communicate with Arduino.
 
@@ -107,7 +107,7 @@ void communicate(union sigval sv)
 }
 
 
-void init_signals()
+static void init_signals()
 {
     struct sigaction act = {
         .sa_handler = die,
@@ -123,7 +123,7 @@ void init_signals()
 }
 
 
-int init_state()
+static int init_state()
 {
     int mem = shm_open("/robot", O_RDWR | O_CREAT, 0);
     if (mem == -1)
@@ -167,7 +167,7 @@ int init_state()
 }
 
 
-void start_workers(struct worker workers[], int mem)
+static void start_workers(struct worker workers[], int mem)
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1)
@@ -235,7 +235,7 @@ void start_workers(struct worker workers[], int mem)
 }
 
 
-void init_timer(struct worker workers[])
+static void init_timer(struct worker workers[])
 {
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
