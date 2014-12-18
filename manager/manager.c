@@ -15,16 +15,19 @@
 #include <unistd.h>
 
 
-struct ucred {
-    pid_t pid;
-    uid_t uid;
-    gid_t gid;
-};
+#define WORKER_COUNT 2
 
 
 struct worker {
     int pid;
     char** argv;
+};
+
+
+struct ucred {
+    pid_t pid;
+    uid_t uid;
+    gid_t gid;
 };
 
 
@@ -264,20 +267,14 @@ int main()
     init_signals();
     int mem = init_state();
 
-    fputs("Waiting for workers...\n", stdout);
+    fputs("Starting workers...\n", stdout);
 
-    char* argv1[] = {"./test", NULL};
-
-    struct worker workers[2] = {
-        {.argv = argv1},
-        {.argv = argv1}
+    static char* worker1_argv[] = {"./test", NULL};
+    static char* worker2_argv[] = {"./test", NULL};
+    static struct worker workers[WORKER_COUNT] = {
+        {.argv = worker1_argv},
+        {.argv = worker2_argv}
     };
-
-    printf("Workers are %s\n", argv1[0]);
-    assert(strcmp(workers[0].argv[0], "./test") == 0);
-    assert(workers[0].argv[1] == NULL);
-    assert(strcmp(workers[1].argv[0], "./test") == 0);
-    assert(workers[1].argv[1] == NULL);
 
     start_workers(workers, mem);
 
