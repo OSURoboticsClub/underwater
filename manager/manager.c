@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -23,6 +24,7 @@ struct ucred {
 
 struct worker {
     int pid;
+    char** argv;
 };
 
 
@@ -33,7 +35,7 @@ struct state* state;
 void die()
 {
     unlink(SOCKET_FILENAME);  // Ignore errors.
-    errx(2, "Dying...");
+    warnx("Dying...");
 }
 
 
@@ -178,45 +180,55 @@ void start_workers(struct worker workers[], int mem)
     if (listen(listener, 1) == -1)
         err(1, "Can't listen on socket");
 
-    socklen_t socklen = sizeof(sa);
-    int s = accept(listener, (struct sockaddr*)&sa, &socklen);
-    if (s == -1)
-        err(1, "Can't accept connection on listener socket");
+    for (int i = 0; i <= 1; ++i) {
+        pid_t pid = fork();
+        if (pid != 0) {
+            if (execv(workers[i].argv[0], workers[i].argv) == -1)
+                err(1, "Can't exec worker");
+        } else if (pid == -1) {
+            err(1, "Can't fork");
+        }
+
+        socklen_t socklen = sizeof(sa);
+        int s = accept(listener, (struct sockaddr*)&sa, &socklen);
+        if (s == -1)
+            err(1, "Can't accept connection on listener socket");
+
+        struct ucred cred;
+        socklen_t cred_len = sizeof(cred);
+        if (getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
+                == -1)
+            err(1, "Can't get credentials");
+        workers[i].pid = cred.pid;
+
+        char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
+        struct msghdr mh = {
+            .msg_name = NULL,
+            .msg_namelen = 0,
+            .msg_iov = NULL,
+            .msg_iovlen = 0,
+            .msg_control = control,
+            .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
+            .msg_flags = 0
+        };
+        struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+        cmh->cmsg_len = CMSG_LEN(sizeof(int));
+        cmh->cmsg_level = SOL_SOCKET;
+        cmh->cmsg_type = SCM_RIGHTS;
+        memcpy(CMSG_DATA(cmh), &mem, sizeof(int));
+        ssize_t count = sendmsg(s, &mh, 0);
+        if (count == -1)
+            err(1, "Can't send shared memory object");
+
+        if (close(s) == -1)
+            err(1, "Can't close worker socket");
+    }
 
     if (close(listener) == -1)
         err(1, "Can't close listener socket");
 
     if (unlink(SOCKET_FILENAME) == -1)
         err(1, "Can't remove listener socket file");
-
-    struct ucred cred;
-    socklen_t cred_len = sizeof(cred);
-    if (getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
-            == -1)
-        err(1, "Can't get credentials");
-    workers[0].pid = cred.pid;
-
-    char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
-    struct msghdr mh = {
-        .msg_name = NULL,
-        .msg_namelen = 0,
-        .msg_iov = NULL,
-        .msg_iovlen = 0,
-        .msg_control = control,
-        .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
-        .msg_flags = 0
-    };
-    struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    cmh->cmsg_len = CMSG_LEN(sizeof(int));
-    cmh->cmsg_level = SOL_SOCKET;
-    cmh->cmsg_type = SCM_RIGHTS;
-    memcpy(CMSG_DATA(cmh), &mem, sizeof(int));
-    ssize_t count = sendmsg(s, &mh, 0);
-    if (count == -1)
-        err(1, "Can't send shared memory object");
-
-    if (close(s) == -1)
-        err(1, "Can't close worker socket");
 }
 
 
@@ -254,7 +266,19 @@ int main()
 
     fputs("Waiting for workers...\n", stdout);
 
-    struct worker workers[1];
+    char* argv1[] = {"./test", NULL};
+
+    struct worker workers[2] = {
+        {.argv = argv1},
+        {.argv = argv1}
+    };
+
+    printf("Workers are %s\n", argv1[0]);
+    assert(strcmp(workers[0].argv[0], "./test") == 0);
+    assert(workers[0].argv[1] == NULL);
+    assert(strcmp(workers[1].argv[0], "./test") == 0);
+    assert(workers[1].argv[1] == NULL);
+
     start_workers(workers, mem);
 
     fputs("Setting up timer...\n", stdout);
@@ -270,6 +294,7 @@ int main()
     pthread_mutex_init(&state->thruster_data_mutex, &ma);
     if (pthread_mutexattr_destroy(&ma) != 0)
         errx(1, "Can't destroy mutex attributes object");
+
     init_timer(workers);
 
     fputs("Ready\n\n", stdout);
