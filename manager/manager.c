@@ -55,8 +55,6 @@ static void communicate(union sigval sv)
 
     if (pthread_mutex_lock(&state->thruster_data_mutex) != 0)
         errx(1, "Can't lock thruster data mutex");
-    fputs("<-- worker    ", stdout);
-    print_thruster_data(&state->thruster_data);
     fputs("--> Arduino (fake)    ", stdout);
     print_thruster_data(&state->thruster_data);
     if (pthread_mutex_unlock(&state->thruster_data_mutex) != 0)
@@ -183,9 +181,9 @@ static void start_workers(struct worker workers[], int mem)
     if (listen(listener, 1) == -1)
         err(1, "Can't listen on socket");
 
-    for (int i = 0; i <= 1; ++i) {
+    for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
         pid_t pid = fork();
-        if (pid != 0) {
+        if (pid == 0) {
             if (execv(workers[i].argv[0], workers[i].argv) == -1)
                 err(1, "Can't exec worker");
         } else if (pid == -1) {

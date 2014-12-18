@@ -3,11 +3,7 @@
 
 int main()
 {
-    fputs("Connecting...\n", stdout);
-
     struct robot robot = init();
-
-    fputs("Ready\n\n", stdout);
 
     struct thruster_data td = {
         .ls = 20,
