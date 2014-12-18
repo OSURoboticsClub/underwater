@@ -41,8 +41,6 @@ void communicate(union sigval sv)
 {
     // Communicate with Arduino.
 
-    if (pthread_mutex_lock(&state->thruster_data_mutex) != 0)
-        errx(1, "Can't lock thruster data mutex");
     int mutex_status = pthread_mutex_trylock(&arduino_mutex);
     if (mutex_status != 0) {
         if (mutex_status == EBUSY)
@@ -50,12 +48,17 @@ void communicate(union sigval sv)
         errx(1, "Can't lock Arduino mutex");
     }
 
+    if (pthread_mutex_lock(&state->thruster_data_mutex) != 0)
+        errx(1, "Can't lock thruster data mutex");
     fputs("<-- worker    ", stdout);
     print_thruster_data(&state->thruster_data);
-
     fputs("--> Arduino (fake)    ", stdout);
     print_thruster_data(&state->thruster_data);
+    if (pthread_mutex_unlock(&state->thruster_data_mutex) != 0)
+        errx(1, "Can't unlock thruster data mutex");
 
+    if (pthread_mutex_lock(&state->sensor_data_mutex) == -1)
+        errx(1, "Can't lock sensor data mutex");
     ++state->sensor_data.a;
     ++state->sensor_data.b;
     ++state->sensor_data.c;
@@ -63,11 +66,11 @@ void communicate(union sigval sv)
     ++state->sensor_data.e;
     fputs("<-- Arduino (fake)    ", stdout);
     print_sensor_data(&state->sensor_data);
+    if (pthread_mutex_unlock(&state->sensor_data_mutex) == -1)
+        errx(1, "Can't unlock sensor data mutex");
 
     if (pthread_mutex_unlock(&arduino_mutex) != 0)
         errx(1, "Can't unlock Arduino mutex");
-    if (pthread_mutex_unlock(&state->thruster_data_mutex) != 0)
-        errx(1, "Can't unlock thruster data mutex");
 
     // Notify workers.
 
@@ -85,11 +88,15 @@ void communicate(union sigval sv)
     ++state->worker_misses[0];
     pthread_cond_signal(&state->worker_conds[0]);  // Always succeeds.
 
+    if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1)
+        errx(1, "Can't unlock worker mutex");
+
+    if (pthread_mutex_lock(&state->sensor_data_mutex) == -1)
+        errx(1, "Can't lock sensor data mutex");
     fputs("--> worker    ", stdout);
     print_sensor_data(&state->sensor_data);
-
-    if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1)
-        errx(1, "Can't release worker mutex");
+    if (pthread_mutex_unlock(&state->sensor_data_mutex) == -1)
+        errx(1, "Can't unlock sensor data mutex");
 
     putchar('\n');
 }
@@ -155,7 +162,7 @@ int init_state()
 }
 
 
-void init_socket(struct worker workers[], int mem)
+void start_workers(struct worker workers[], int mem)
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1)
@@ -248,11 +255,21 @@ int main()
     fputs("Waiting for workers...\n", stdout);
 
     struct worker workers[1];
-    init_socket(workers, mem);
+    start_workers(workers, mem);
 
     fputs("Setting up timer...\n", stdout);
 
     pthread_mutex_init(&arduino_mutex, NULL);
+
+    pthread_mutexattr_t ma;
+    if (pthread_mutexattr_init(&ma) != 0)
+        errx(1, "Can't initialize mutex attributes object");
+    if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
+        errx(1, "Can't set mutex to process-shared");
+    pthread_mutex_init(&state->sensor_data_mutex, &ma);
+    pthread_mutex_init(&state->thruster_data_mutex, &ma);
+    if (pthread_mutexattr_destroy(&ma) != 0)
+        errx(1, "Can't destroy mutex attributes object");
     init_timer(workers);
 
     fputs("Ready\n\n", stdout);

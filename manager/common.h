@@ -32,6 +32,7 @@ struct thruster_data {
 
 struct state {
     struct sensor_data sensor_data;
+    pthread_mutex_t sensor_data_mutex;
     struct thruster_data thruster_data;
     pthread_mutex_t thruster_data_mutex;
 
