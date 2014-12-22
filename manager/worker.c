@@ -37,23 +37,20 @@ struct robot init()
     if (recvmsg(s, &mh, 0) == -1)
         err(1, "Can't recvmsg() shared memory object");
     struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    int mem;
+    int data[2];
     if (cmh == NULL)
         errx(1, "No cmsghdr object received");
-    memcpy(&mem, CMSG_DATA(cmh), sizeof(int));
+    memcpy(data, CMSG_DATA(cmh), sizeof(data));
+
     robot.state = mmap(NULL, sizeof(struct state),
-        PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
+        PROT_READ | PROT_WRITE, MAP_SHARED, data[0], 0);
     if (robot.state == NULL)
         err(1, "Can't mmap() robot state");
 
-    cmh = CMSG_NXTHDR(&mh, cmh);
-    if (cmh == NULL)
-        errx(1, "Only one cmsghdr object received");
-    memcpy(&mem, CMSG_DATA(cmh), sizeof(int));
-    robot.ctl = mmap(NULL, sizeof(struct worker_control),
-        PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
+    robot.ctl = mmap(NULL, sizeof(struct state),
+        PROT_READ | PROT_WRITE, MAP_SHARED, data[1], 0);
     if (robot.state == NULL)
-        err(1, "Can't mmap() worker control struct");
+        err(1, "Can't mmap() robot state");
 
     if (close(s) == -1)
         err(1, "Can't close socket");
@@ -64,11 +61,14 @@ struct robot init()
 
 struct sensor_data wait_for_sensor_data(struct robot* robot)
 {
+    fputs("test: About to lock notification mutex\n", stdout);
     if (pthread_mutex_lock(&robot->ctl->n_mutex) == -1)
         errx(1, "Can't lock notification mutex");
+    fputs("test: Locked notification mutex\n", stdout);
 
     while (!robot->ctl->n) {
         alarm(5);
+        fputs("test: Waiting for notification...\n", stdout);
         pthread_cond_wait(&robot->ctl->n_cond, &robot->ctl->n_mutex);
         alarm(0);
     }

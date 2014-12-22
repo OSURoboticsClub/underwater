@@ -79,18 +79,6 @@ static void notify_workers(union sigval sv)
             errx(1, "Can't lock worker mutex");
         }
 
-        if (worker->t >= 5) {
-            if (kill(worker->pid, SIGKILL) == -1)
-                err(1, "Can't kill worker");
-            r = waitpid(worker->pid, NULL, WNOHANG);
-            if (r == 0)
-                err(1, "Worker didn't die");
-            else if (r == -1)
-                err(1, "Can't reap worker");
-
-            worker->state = DEAD;
-        }
-
         if (worker->state == DEAD) {
             r = pthread_mutex_trylock(&listener_mutex);
             if (r == EBUSY)
@@ -105,6 +93,8 @@ static void notify_workers(union sigval sv)
             } else if (worker->pid == -1) {
                 err(1, "Can't fork");
             }
+
+            worker->t = 0;
             worker->state = CONNECTING;
         } else if (worker->state == CONNECTING) {
             r = poll(&listener_poll, 1, 0);
@@ -123,30 +113,25 @@ static void notify_workers(union sigval sv)
                     goto worker_end;
                 }
 
-                char control[CMSG_SPACE(sizeof(int)) * 2];
+                int data[2] = {state_fd, worker->ctl_fd};
+
+                char control[CMSG_SPACE(sizeof(int))];
                 struct msghdr mh = {
-                    .msg_name = NULL,
                     .msg_namelen = 0,
-                    .msg_iov = NULL,
                     .msg_iovlen = 0,
                     .msg_control = control,
                     .msg_controllen = sizeof(control),
                     .msg_flags = 0
                 };
+
                 struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
                 if (cmh == NULL)
                     errx(1, "Can't get first cmsghdr object");
-                cmh->cmsg_len = CMSG_LEN(sizeof(int));
+                cmh->cmsg_len = CMSG_LEN(sizeof(data));
                 cmh->cmsg_level = SOL_SOCKET;
                 cmh->cmsg_type = SCM_RIGHTS;
-                memcpy(CMSG_DATA(cmh), &state_fd, sizeof(int));
-                cmh = CMSG_NXTHDR(&mh, cmh);
-                if (cmh == NULL)
-                    errx(1, "Can't get second cmsghdr object");
-                cmh->cmsg_len = CMSG_LEN(sizeof(int));
-                cmh->cmsg_level = SOL_SOCKET;
-                cmh->cmsg_type = SCM_RIGHTS;
-                memcpy(CMSG_DATA(cmh), &worker->ctl_fd, sizeof(int));
+                memcpy(CMSG_DATA(cmh), &state_fd, sizeof(data));
+
                 ssize_t count = sendmsg(s, &mh, 0);
                 if (count == -1) {
                     warn("Can't send shared memory object");
@@ -160,17 +145,24 @@ static void notify_workers(union sigval sv)
                     worker->state = DEAD;
                     goto worker_end;
                 }
+            } else {
+                ++worker->t;
+                warnx("Worker %d is slow (t = %d)", i, worker->t);
+                goto worker_end;
             }
         } else if (worker->state == RUNNING) {
             r = pthread_mutex_trylock(&worker->ctl->n_mutex);
             if (r == EBUSY) {
                 ++worker->t;
                 warnx("Worker %d is slow (t = %d)", i, worker->t);
+                goto worker_end;
             } else if (r != 0) {
                 errx(1, "Can't lock worker notification mutex");
             }
 
+            worker->t = 0;
             worker->ctl->n = true;
+            fputs("Notifying worker...\n", stdout);
             pthread_cond_signal(&worker->ctl->n_cond);
 
             if (pthread_mutex_unlock(&worker->ctl->n_mutex) == -1)
@@ -178,6 +170,18 @@ static void notify_workers(union sigval sv)
         }
 
 worker_end:
+        if (worker->t >= 5) {
+            if (kill(worker->pid, SIGKILL) == -1)
+                err(1, "Can't kill worker");
+            r = waitpid(worker->pid, NULL, WNOHANG);
+            if (r == 0)
+                err(1, "Worker didn't die");
+            else if (r == -1)
+                err(1, "Can't reap worker");
+
+            worker->state = DEAD;
+        }
+
         if (pthread_mutex_unlock(&worker->mutex) != 0)
             err(1, "Can't unlock worker mutex");
     }

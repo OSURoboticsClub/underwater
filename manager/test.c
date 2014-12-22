@@ -5,6 +5,8 @@ int main()
 {
     struct robot robot = init();
 
+    fputs("test: ready\n", stdout);
+
     struct thruster_data td = {
         .ls = 20,
         .rs = 20,
@@ -21,6 +23,7 @@ int main()
 
     while (1) {
         wait_for_sensor_data(&robot);
+        fputs("test: Got notification\n", stdout);
 
         ++td.ls;
         ++td.rs;
