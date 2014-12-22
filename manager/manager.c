@@ -4,6 +4,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,17 +12,12 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
 
-#define WORKER_COUNT 2
-
-
-struct worker {
-    int pid;
-    char** argv;
-};
+#define WORKER_COUNT 1
 
 
 struct ucred {
@@ -31,8 +27,33 @@ struct ucred {
 };
 
 
-static pthread_mutex_t arduino_mutex;
+enum worker_state {
+    DEAD,
+    CONNECTING,
+    RUNNING
+};
+
+
+struct worker {
+    pid_t pid;
+    char** argv;
+
+    pthread_mutex_t mutex;
+
+    enum worker_state state;  // worker state
+    int t;  // ticks since last ack
+
+    int ctl_fd;
+    struct worker_control* ctl;
+};
+
+
+pthread_mutex_t listener_mutex;
+struct pollfd listener_poll;  // poll() argument
+
+
 static struct state* state;
+static int state_fd;
 
 
 static void die()
@@ -42,66 +63,120 @@ static void die()
 }
 
 
-static void communicate(union sigval sv)
+static void notify_workers(union sigval sv)
 {
-    // Communicate with Arduino.
+    int r;  // temporary return value holder
 
-    int mutex_status = pthread_mutex_trylock(&arduino_mutex);
-    if (mutex_status != 0) {
-        if (mutex_status == EBUSY)
-            errx(1, "Arduino is slow");
-        errx(1, "Can't lock Arduino mutex");
+    struct worker* workers = sv.sival_ptr;
+    for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
+        struct worker* worker = &workers[i];
+
+        r = pthread_mutex_trylock(&worker->mutex);
+        if (r == EBUSY) {
+            warnx("communicate() is slow");
+            continue;
+        } else if (r != 0) {
+            errx(1, "Can't lock worker mutex");
+        }
+
+        if (worker->t >= 5) {
+            if (kill(worker->pid, SIGKILL) == -1)
+                err(1, "Can't kill worker");
+            r = waitpid(worker->pid, NULL, WNOHANG);
+            if (r == 0)
+                err(1, "Worker didn't die");
+            else if (r == -1)
+                err(1, "Can't reap worker");
+
+            worker->state = DEAD;
+        }
+
+        if (worker->state == DEAD) {
+            r = pthread_mutex_trylock(&listener_mutex);
+            if (r == EBUSY)
+                goto worker_end;
+            else if (r != 0)
+                errx(1, "Can't lock listener mutex");
+
+            worker->pid = fork();
+            if (worker->pid == 0) {
+                if (execv(workers[i].argv[0], workers[i].argv) == -1)
+                    err(1, "Can't exec worker");
+            } else if (worker->pid == -1) {
+                err(1, "Can't fork");
+            }
+            worker->state = CONNECTING;
+        } else if (worker->state == CONNECTING) {
+            r = poll(&listener_poll, 1, 0);
+            if (r == -1) {
+                err(1, "Can't poll on listener");
+            } else if (r == 1) {
+                struct sockaddr_un sa;
+                sa.sun_family = AF_UNIX;
+                strcpy(sa.sun_path, SOCKET_FILENAME);
+                socklen_t socklen = sizeof(sa);
+                int s = accept(listener_poll.fd, (struct sockaddr*)&sa,
+                    &socklen);
+                if (s == -1) {
+                    warn("Can't accept connection on listener socket");
+                    worker->state = DEAD;
+                    goto worker_end;
+                }
+
+                char control[CMSG_SPACE(sizeof(int)) * 2];
+                struct msghdr mh = {
+                    .msg_name = NULL,
+                    .msg_namelen = 0,
+                    .msg_iov = NULL,
+                    .msg_iovlen = 0,
+                    .msg_control = control,
+                    .msg_controllen = CMSG_SPACE(sizeof(int)) * 2,
+                    .msg_flags = 0
+                };
+                struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+                cmh->cmsg_len = CMSG_LEN(sizeof(int));
+                cmh->cmsg_level = SOL_SOCKET;
+                cmh->cmsg_type = SCM_RIGHTS;
+                memcpy(CMSG_DATA(cmh), &state_fd, sizeof(int));
+                cmh = CMSG_NXTHDR(&mh, cmh);
+                cmh->cmsg_len = CMSG_LEN(sizeof(int));
+                cmh->cmsg_level = SOL_SOCKET;
+                cmh->cmsg_type = SCM_RIGHTS;
+                memcpy(CMSG_DATA(cmh), &state_fd, sizeof(int));
+                ssize_t count = sendmsg(s, &mh, 0);
+                if (count == -1) {
+                    warn("Can't send shared memory object");
+                    worker->state = DEAD;
+                } else {
+                    worker->state = RUNNING;
+                }
+
+                if (close(s) == -1) {
+                    warn("Can't close worker socket");
+                    worker->state = DEAD;
+                    goto worker_end;
+                }
+            }
+        } else if (worker->state == RUNNING) {
+            r = pthread_mutex_trylock(&worker->ctl->n_mutex);
+            if (r == EBUSY) {
+                ++worker->t;
+                warnx("Worker %d is slow (t = %d)", i, worker->t);
+            } else if (r != 0) {
+                errx(1, "Can't lock worker notification mutex");
+            }
+
+            worker->ctl->n = true;
+            pthread_cond_signal(&worker->ctl->n_cond);
+
+            if (pthread_mutex_unlock(&worker->ctl->n_mutex) == -1)
+                errx(1, "Can't unlock worker notification mutex");
+        }
+
+worker_end:
+        if (pthread_mutex_unlock(&worker->mutex) != 0)
+            err(1, "Can't unlock worker mutex");
     }
-
-    if (pthread_mutex_lock(&state->thruster_data_mutex) != 0)
-        errx(1, "Can't lock thruster data mutex");
-    fputs("--> Arduino (fake)    ", stdout);
-    print_thruster_data(&state->thruster_data);
-    if (pthread_mutex_unlock(&state->thruster_data_mutex) != 0)
-        errx(1, "Can't unlock thruster data mutex");
-
-    if (pthread_mutex_lock(&state->sensor_data_mutex) == -1)
-        errx(1, "Can't lock sensor data mutex");
-    ++state->sensor_data.a;
-    ++state->sensor_data.b;
-    ++state->sensor_data.c;
-    ++state->sensor_data.d;
-    ++state->sensor_data.e;
-    fputs("<-- Arduino (fake)    ", stdout);
-    print_sensor_data(&state->sensor_data);
-    if (pthread_mutex_unlock(&state->sensor_data_mutex) == -1)
-        errx(1, "Can't unlock sensor data mutex");
-
-    if (pthread_mutex_unlock(&arduino_mutex) != 0)
-        errx(1, "Can't unlock Arduino mutex");
-
-    // Notify workers.
-
-    /*struct worker* workers = sv.sival_ptr;*/
-
-    if (pthread_mutex_lock(&state->worker_mutexes[0]) == -1)
-        errx(1, "Can't lock worker mutex");
-
-    if (state->worker_misses[0] >= 4)
-        errx(1, "Worker is too slow");
-    else if (state->worker_misses[0] > 0)
-        warnx("Worker is slow (%d notifications not acked)",
-            state->worker_misses[0]);
-
-    ++state->worker_misses[0];
-    pthread_cond_signal(&state->worker_conds[0]);  // Always succeeds.
-
-    if (pthread_mutex_unlock(&state->worker_mutexes[0]) == -1)
-        errx(1, "Can't unlock worker mutex");
-
-    if (pthread_mutex_lock(&state->sensor_data_mutex) == -1)
-        errx(1, "Can't lock sensor data mutex");
-    fputs("--> worker    ", stdout);
-    print_sensor_data(&state->sensor_data);
-    if (pthread_mutex_unlock(&state->sensor_data_mutex) == -1)
-        errx(1, "Can't unlock sensor data mutex");
-
-    putchar('\n');
 }
 
 
@@ -146,26 +221,18 @@ static int init_state()
         errx(1, "Can't initialize mutex attributes object");
     if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
         errx(1, "Can't set mutex to process-shared");
-    pthread_mutex_init(&state->worker_mutexes[0], &ma);  // Always suceeds.
+    pthread_mutex_init(&state->sensor_data_mutex, &ma);
+    pthread_mutex_init(&state->thruster_data_mutex, &ma);
+    for (int i = 0; i <= WORKER_COUNT - 1; ++i)
+
     if (pthread_mutexattr_destroy(&ma) != 0)
         errx(1, "Can't destroy mutex attributes object");
-
-    pthread_condattr_t ca;
-    if (pthread_condattr_init(&ca) != 0)
-        errx(1, "Can't initialize condition variable attributes object");
-    if (pthread_condattr_setpshared(&ca, PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set condition variable to process-shared");
-    pthread_cond_init(&state->worker_conds[0], &ca);  // Always succeeds.
-    if (pthread_condattr_destroy(&ca) != 0)
-        errx(1, "Can't destory condition variable attributes object");
-
-    state->worker_misses[0] = 0;
 
     return mem;
 }
 
 
-static void start_workers(struct worker workers[], int mem)
+static void init_socket()
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1)
@@ -181,55 +248,54 @@ static void start_workers(struct worker workers[], int mem)
     if (listen(listener, 1) == -1)
         err(1, "Can't listen on socket");
 
+    listener_poll.fd = listener;
+    listener_poll.events = POLLIN;
+}
+
+
+static void init_workers(struct worker workers[])
+{
+    pthread_mutexattr_t ma;
+    if (pthread_mutexattr_init(&ma) != 0)
+        errx(1, "Can't initialize mutex attributes object");
+    if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
+        errx(1, "Can't set mutex to process-shared");
+
+    pthread_condattr_t ca;
+    if (pthread_condattr_init(&ca) != 0)
+        errx(1, "Can't initialize condition variable attributes object");
+    if (pthread_condattr_setpshared(&ca, PTHREAD_PROCESS_SHARED) != 0)
+        errx(1, "Can't set condition variable to process-shared");
+
     for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            if (execv(workers[i].argv[0], workers[i].argv) == -1)
-                err(1, "Can't exec worker");
-        } else if (pid == -1) {
-            err(1, "Can't fork");
-        }
+        struct worker* worker = &workers[i];
 
-        socklen_t socklen = sizeof(sa);
-        int s = accept(listener, (struct sockaddr*)&sa, &socklen);
-        if (s == -1)
-            err(1, "Can't accept connection on listener socket");
+        pthread_mutex_init(&worker->mutex, NULL);
+        worker->state = DEAD;
+        worker->t = 0;
 
-        struct ucred cred;
-        socklen_t cred_len = sizeof(cred);
-        if (getsockopt(s, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)
-                == -1)
-            err(1, "Can't get credentials");
-        workers[i].pid = cred.pid;
+        worker->ctl_fd = shm_open("/robot", O_RDWR | O_CREAT, 0);
+        if (worker->ctl_fd == -1)
+            err(1, "Can't open shared memory object");
+        if (shm_unlink("/robot") == -1)
+            err(1, "Can't unlink shared memory object");
+        if (ftruncate(worker->ctl_fd, sizeof(struct worker_control)) == -1)
+            err(1, "Can't set size of shared memory object");
+        worker->ctl = mmap(NULL, sizeof(struct worker_control),
+            PROT_READ | PROT_WRITE, MAP_SHARED, worker->ctl_fd, 0);
+        if (worker->ctl == NULL)
+            err(1, "Can't mmap() shared memory object");
 
-        char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
-        struct msghdr mh = {
-            .msg_name = NULL,
-            .msg_namelen = 0,
-            .msg_iov = NULL,
-            .msg_iovlen = 0,
-            .msg_control = control,
-            .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
-            .msg_flags = 0
-        };
-        struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-        cmh->cmsg_len = CMSG_LEN(sizeof(int));
-        cmh->cmsg_level = SOL_SOCKET;
-        cmh->cmsg_type = SCM_RIGHTS;
-        memcpy(CMSG_DATA(cmh), &mem, sizeof(int));
-        ssize_t count = sendmsg(s, &mh, 0);
-        if (count == -1)
-            err(1, "Can't send shared memory object");
-
-        if (close(s) == -1)
-            err(1, "Can't close worker socket");
+        pthread_mutex_init(&worker->ctl->n_mutex, &ma);
+        pthread_cond_init(&worker->ctl->n_cond, &ca);
+        worker->ctl->n = false;
     }
 
-    if (close(listener) == -1)
-        err(1, "Can't close listener socket");
+    if (pthread_mutexattr_destroy(&ma) != 0)
+        errx(1, "Can't destroy mutex attributes object");
 
-    if (unlink(SOCKET_FILENAME) == -1)
-        err(1, "Can't remove listener socket file");
+    if (pthread_condattr_destroy(&ca) != 0)
+        errx(1, "Can't destroy condition variable attributes object");
 }
 
 
@@ -238,7 +304,7 @@ static void init_timer(struct worker workers[])
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
         .sigev_value.sival_ptr = workers,
-        .sigev_notify_function = communicate,
+        .sigev_notify_function = notify_workers,
         .sigev_notify_attributes = NULL
     };
     timer_t timerid;
@@ -263,32 +329,21 @@ int main()
         err(1, "Can't set die() to be called at exit");
 
     init_signals();
-    int mem = init_state();
+    state_fd = init_state();
 
     fputs("Starting workers...\n", stdout);
 
     static char* worker1_argv[] = {"./test", NULL};
-    static char* worker2_argv[] = {"./test", NULL};
+    /*static char* worker2_argv[] = {"./test", NULL};*/
     static struct worker workers[WORKER_COUNT] = {
         {.argv = worker1_argv},
-        {.argv = worker2_argv}
+        /*{.argv = worker2_argv}*/
     };
 
-    start_workers(workers, mem);
+    init_socket();
+    init_workers(workers);
 
     fputs("Setting up timer...\n", stdout);
-
-    pthread_mutex_init(&arduino_mutex, NULL);
-
-    pthread_mutexattr_t ma;
-    if (pthread_mutexattr_init(&ma) != 0)
-        errx(1, "Can't initialize mutex attributes object");
-    if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set mutex to process-shared");
-    pthread_mutex_init(&state->sensor_data_mutex, &ma);
-    pthread_mutex_init(&state->thruster_data_mutex, &ma);
-    if (pthread_mutexattr_destroy(&ma) != 0)
-        errx(1, "Can't destroy mutex attributes object");
 
     init_timer(workers);
 

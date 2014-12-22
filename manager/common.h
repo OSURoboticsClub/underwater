@@ -4,6 +4,7 @@
 
 #include <inttypes.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -35,10 +36,13 @@ struct state {
     pthread_mutex_t sensor_data_mutex;
     struct thruster_data thruster_data;
     pthread_mutex_t thruster_data_mutex;
+};
 
-    pthread_mutex_t worker_mutexes[1];
-    pthread_cond_t worker_conds[1];
-    int worker_misses[1];
+
+struct worker_control {
+    pthread_mutex_t n_mutex;
+    pthread_cond_t n_cond;
+    bool n;
 };
 
 
