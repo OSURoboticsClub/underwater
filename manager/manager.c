@@ -130,19 +130,23 @@ static void notify_workers(union sigval sv)
                     .msg_iov = NULL,
                     .msg_iovlen = 0,
                     .msg_control = control,
-                    .msg_controllen = CMSG_SPACE(sizeof(int)) * 2,
+                    .msg_controllen = sizeof(control),
                     .msg_flags = 0
                 };
                 struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
+                if (cmh == NULL)
+                    errx(1, "Can't get first cmsghdr object");
                 cmh->cmsg_len = CMSG_LEN(sizeof(int));
                 cmh->cmsg_level = SOL_SOCKET;
                 cmh->cmsg_type = SCM_RIGHTS;
                 memcpy(CMSG_DATA(cmh), &state_fd, sizeof(int));
                 cmh = CMSG_NXTHDR(&mh, cmh);
+                if (cmh == NULL)
+                    errx(1, "Can't get second cmsghdr object");
                 cmh->cmsg_len = CMSG_LEN(sizeof(int));
                 cmh->cmsg_level = SOL_SOCKET;
                 cmh->cmsg_type = SCM_RIGHTS;
-                memcpy(CMSG_DATA(cmh), &state_fd, sizeof(int));
+                memcpy(CMSG_DATA(cmh), &worker->ctl_fd, sizeof(int));
                 ssize_t count = sendmsg(s, &mh, 0);
                 if (count == -1) {
                     warn("Can't send shared memory object");
@@ -221,9 +225,9 @@ static int init_state()
         errx(1, "Can't initialize mutex attributes object");
     if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
         errx(1, "Can't set mutex to process-shared");
+
     pthread_mutex_init(&state->sensor_data_mutex, &ma);
     pthread_mutex_init(&state->thruster_data_mutex, &ma);
-    for (int i = 0; i <= WORKER_COUNT - 1; ++i)
 
     if (pthread_mutexattr_destroy(&ma) != 0)
         errx(1, "Can't destroy mutex attributes object");

@@ -24,14 +24,14 @@ struct robot init()
     if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1)
         err(1, "Can't connect to socket");
 
-    char control[CMSG_SPACE(sizeof(int)) * 1];  // one cmsg with one int
+    char control[CMSG_SPACE(sizeof(int)) * 2];
     struct msghdr mh = {
         .msg_name = NULL,
         .msg_namelen = 0,
         .msg_iov = NULL,
         .msg_iovlen = 0,
         .msg_control = control,
-        .msg_controllen = CMSG_SPACE(sizeof(int)) * 1,
+        .msg_controllen = CMSG_SPACE(sizeof(int)) * 2,
         .msg_flags = 0
     };
     if (recvmsg(s, &mh, 0) == -1)
@@ -41,14 +41,22 @@ struct robot init()
     if (cmh == NULL)
         errx(1, "No cmsghdr object received");
     memcpy(&mem, CMSG_DATA(cmh), sizeof(int));
-
-    if (close(s) == -1)
-        err(1, "Can't close socket");
-
     robot.state = mmap(NULL, sizeof(struct state),
         PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
     if (robot.state == NULL)
-        err(1, "Can't mmap() shared memory object");
+        err(1, "Can't mmap() robot state");
+
+    cmh = CMSG_NXTHDR(&mh, cmh);
+    if (cmh == NULL)
+        errx(1, "Only one cmsghdr object received");
+    memcpy(&mem, CMSG_DATA(cmh), sizeof(int));
+    robot.ctl = mmap(NULL, sizeof(struct worker_control),
+        PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
+    if (robot.state == NULL)
+        err(1, "Can't mmap() worker control struct");
+
+    if (close(s) == -1)
+        err(1, "Can't close socket");
 
     return robot;
 }
@@ -56,24 +64,23 @@ struct robot init()
 
 struct sensor_data wait_for_sensor_data(struct robot* robot)
 {
-    if (pthread_mutex_lock(&robot->state->worker_mutexes[0]) == -1)
-        errx(1, "Can't lock worker mutex");
+    if (pthread_mutex_lock(&robot->ctl->n_mutex) == -1)
+        errx(1, "Can't lock notification mutex");
 
-    while (robot->state->worker_misses[0] == 0) {
+    while (!robot->ctl->n) {
         alarm(5);
-        pthread_cond_wait(&robot->state->worker_conds[0],
-            &robot->state->worker_mutexes[0]);
+        pthread_cond_wait(&robot->ctl->n_cond, &robot->ctl->n_mutex);
         alarm(0);
     }
-    robot->state->worker_misses[0] = 0;
+    robot->ctl->n = false;
 
     fputs("<-- manager    ", stdout);
     print_sensor_data(&robot->state->sensor_data);
 
     struct sensor_data sd = robot->state->sensor_data;
 
-    if (pthread_mutex_unlock(&robot->state->worker_mutexes[0]) == -1)
-        errx(1, "Can't unlock worker mutex");
+    if (pthread_mutex_unlock(&robot->ctl->n_mutex) == -1)
+        errx(1, "Can't unlock notification mutex");
 
     return sd;
 }
