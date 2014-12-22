@@ -100,6 +100,9 @@ static void notify_workers(union sigval sv)
             r = poll(&listener_poll, 1, 0);
             if (r == -1) {
                 err(1, "Can't poll on listener");
+            } else if (r == 0) {
+                ++worker->t;
+                warnx("Worker %d is slow to connect (t = %d)", i, worker->t);
             } else if (r == 1) {
                 struct sockaddr_un sa;
                 sa.sun_family = AF_UNIX;
@@ -137,33 +140,28 @@ static void notify_workers(union sigval sv)
                     warn("Can't send shared memory object");
                     worker->state = DEAD;
                 } else {
+                    worker->t = 0;
                     worker->state = RUNNING;
                 }
 
                 if (close(s) == -1) {
                     warn("Can't close worker socket");
                     worker->state = DEAD;
-                    goto worker_end;
                 }
-            } else {
-                ++worker->t;
-                warnx("Worker %d is slow (t = %d)", i, worker->t);
-                goto worker_end;
             }
         } else if (worker->state == RUNNING) {
             r = pthread_mutex_trylock(&worker->ctl->n_mutex);
             if (r == EBUSY) {
                 ++worker->t;
-                warnx("Worker %d is slow (t = %d)", i, worker->t);
-                goto worker_end;
+                warnx("Worker %d is slow to ack (t = %d)", i, worker->t);
             } else if (r != 0) {
                 errx(1, "Can't lock worker notification mutex");
+            } else {
+                worker->t = 0;
+                worker->ctl->n = true;
+                fputs("Notifying worker...\n", stdout);
+                pthread_cond_signal(&worker->ctl->n_cond);
             }
-
-            worker->t = 0;
-            worker->ctl->n = true;
-            fputs("Notifying worker...\n", stdout);
-            pthread_cond_signal(&worker->ctl->n_cond);
 
             if (pthread_mutex_unlock(&worker->ctl->n_mutex) == -1)
                 errx(1, "Can't unlock worker notification mutex");
