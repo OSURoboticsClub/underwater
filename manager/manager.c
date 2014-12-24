@@ -103,15 +103,17 @@ static void notify_workers(union sigval sv)
             } else if (r == 0) {
                 ++worker->t;
                 warnx("Worker %d is slow to connect (t = %d)", i, worker->t);
-            } else if (r == 1) {
+            } else {
                 struct sockaddr_un sa;
                 sa.sun_family = AF_UNIX;
                 strcpy(sa.sun_path, SOCKET_FILENAME);
                 socklen_t socklen = sizeof(sa);
-                int s = accept(listener_poll.fd, (struct sockaddr*)&sa,
+                int sock = accept(listener_poll.fd, (struct sockaddr*)&sa,
                     &socklen);
-                if (s == -1) {
-                    warn("Can't accept connection on listener socket");
+                if (pthread_mutex_unlock(&listener_mutex) == -1)
+                    errx(1, "Can't unlock listener mutex");
+                if (sock == -1) {
+                    warnx("Can't accept connection on listener socket");
                     worker->state = DEAD;
                     goto worker_end;
                 }
@@ -135,7 +137,7 @@ static void notify_workers(union sigval sv)
                 cmh->cmsg_type = SCM_RIGHTS;
                 memcpy(CMSG_DATA(cmh), &state_fd, sizeof(data));
 
-                ssize_t count = sendmsg(s, &mh, 0);
+                ssize_t count = sendmsg(sock, &mh, 0);
                 if (count == -1) {
                     warn("Can't send shared memory object");
                     worker->state = DEAD;
@@ -144,7 +146,7 @@ static void notify_workers(union sigval sv)
                     worker->state = RUNNING;
                 }
 
-                if (close(s) == -1) {
+                if (close(sock) == -1) {
                     warn("Can't close worker socket");
                     worker->state = DEAD;
                 }
@@ -154,8 +156,12 @@ static void notify_workers(union sigval sv)
             if (r == EBUSY) {
                 ++worker->t;
                 warnx("Worker %d is slow to ack (t = %d)", i, worker->t);
+                goto worker_end;
             } else if (r != 0) {
                 errx(1, "Can't lock worker notification mutex");
+            } else if (worker->ctl->n) {
+                ++worker->t;
+                warnx("Worker %d is slow to ack (t = %d)", i, worker->t);
             } else {
                 worker->t = 0;
                 worker->ctl->n = true;
@@ -169,6 +175,11 @@ static void notify_workers(union sigval sv)
 
 worker_end:
         if (worker->t >= 5) {
+            if (worker->state == CONNECTING) {
+                if (pthread_mutex_unlock(&listener_mutex) == -1)
+                    errx(1, "Can't unlock listener mutex");
+            }
+
             if (kill(worker->pid, SIGKILL) == -1)
                 err(1, "Can't kill worker");
             r = waitpid(worker->pid, NULL, WNOHANG);
