@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 
-#define WORKER_COUNT 1
+#define WORKER_COUNT 2
 
 
 struct ucred {
@@ -188,11 +188,12 @@ worker_end:
                     errx(1, "Can't unlock listener mutex");
             }
 
+            printf("Killing worker %d...\n", i);
             if (kill(worker->pid, SIGKILL) == -1)
                 err(1, "Can't kill worker");
             r = waitpid(worker->pid, NULL, WNOHANG);
             if (r == 0)
-                err(1, "Worker didn't die");
+                errx(1, "Worker didn't die");
             else if (r == -1)
                 err(1, "Can't reap worker");
 
@@ -354,10 +355,10 @@ int main()
     fputs("Starting workers...\n", stdout);
 
     static char* worker1_argv[] = {"./test", NULL};
-    /*static char* worker2_argv[] = {"./test", NULL};*/
+    static char* worker2_argv[] = {"./test", NULL};
     static struct worker workers[WORKER_COUNT] = {
         {.argv = worker1_argv},
-        /*{.argv = worker2_argv}*/
+        {.argv = worker2_argv}
     };
 
     init_socket();

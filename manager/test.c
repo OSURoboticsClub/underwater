@@ -21,7 +21,7 @@ int main()
         .tv_nsec = 300000000
     };
 
-    while (1) {
+    for (int i = 0; i <= 4; ++i) {
         wait_for_sensor_data(&robot);
 
         ++td.ls;
@@ -36,4 +36,6 @@ int main()
 
         putchar('\n');
     }
+
+    while (1) { __asm(""); }  // spin forever
 }
