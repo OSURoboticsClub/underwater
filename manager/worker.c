@@ -61,14 +61,11 @@ struct robot init()
 
 struct sensor_data wait_for_sensor_data(struct robot* robot)
 {
-    fputs("test: About to lock notification mutex\n", stdout);
     if (pthread_mutex_lock(&robot->ctl->n_mutex) == -1)
         errx(1, "Can't lock notification mutex");
-    fputs("test: Locked notification mutex\n", stdout);
 
     while (!robot->ctl->n) {
         alarm(5);
-        fputs("test: Waiting for notification...\n", stdout);
         pthread_cond_wait(&robot->ctl->n_cond, &robot->ctl->n_mutex);
         alarm(0);
     }

@@ -22,9 +22,7 @@ int main()
     };
 
     while (1) {
-        fputs("test: About to wait for notification...\n", stdout);
         wait_for_sensor_data(&robot);
-        fputs("test: Got notification\n", stdout);
 
         ++td.ls;
         ++td.rs;
