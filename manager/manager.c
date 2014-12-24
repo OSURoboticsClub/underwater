@@ -56,6 +56,10 @@ static struct state* state;
 static int state_fd;
 
 
+static pthread_mutexattr_t mutex_pshared;
+static pthread_condattr_t cond_pshared;
+
+
 static void die()
 {
     unlink(SOCKET_FILENAME);  // Ignore errors.
@@ -96,6 +100,10 @@ static void notify_workers(union sigval sv)
 
             worker->t = 0;
             worker->state = CONNECTING;
+
+            pthread_mutex_init(&worker->ctl->n_mutex, &mutex_pshared);
+            pthread_cond_init(&worker->ctl->n_cond, &cond_pshared);
+            worker->ctl->n = false;
         } else if (worker->state == CONNECTING) {
             r = poll(&listener_poll, 1, 0);
             if (r == -1) {
@@ -176,7 +184,7 @@ static void notify_workers(union sigval sv)
 worker_end:
         if (worker->t >= 5) {
             if (worker->state == CONNECTING) {
-                if (pthread_mutex_unlock(&listener_mutex) == -1)
+                if (pthread_mutex_unlock(&listener_mutex) != 0)
                     errx(1, "Can't unlock listener mutex");
             }
 
@@ -187,6 +195,11 @@ worker_end:
                 err(1, "Worker didn't die");
             else if (r == -1)
                 err(1, "Can't reap worker");
+
+            if (pthread_mutex_destroy(&worker->ctl->n_mutex) != 0)
+                errx(1, "Can't destroy notification mutex");
+            if (pthread_cond_destroy(&worker->ctl->n_cond) != 0)
+                errx(1, "Can't destroy notification condition variable");
 
             worker->state = DEAD;
         }
@@ -272,18 +285,6 @@ static void init_socket()
 
 static void init_workers(struct worker workers[])
 {
-    pthread_mutexattr_t ma;
-    if (pthread_mutexattr_init(&ma) != 0)
-        errx(1, "Can't initialize mutex attributes object");
-    if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set mutex to process-shared");
-
-    pthread_condattr_t ca;
-    if (pthread_condattr_init(&ca) != 0)
-        errx(1, "Can't initialize condition variable attributes object");
-    if (pthread_condattr_setpshared(&ca, PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set condition variable to process-shared");
-
     for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
         struct worker* worker = &workers[i];
 
@@ -302,17 +303,7 @@ static void init_workers(struct worker workers[])
             PROT_READ | PROT_WRITE, MAP_SHARED, worker->ctl_fd, 0);
         if (worker->ctl == NULL)
             err(1, "Can't mmap() shared memory object");
-
-        pthread_mutex_init(&worker->ctl->n_mutex, &ma);
-        pthread_cond_init(&worker->ctl->n_cond, &ca);
-        worker->ctl->n = false;
     }
-
-    if (pthread_mutexattr_destroy(&ma) != 0)
-        errx(1, "Can't destroy mutex attributes object");
-
-    if (pthread_condattr_destroy(&ca) != 0)
-        errx(1, "Can't destroy condition variable attributes object");
 }
 
 
@@ -344,6 +335,18 @@ int main()
 
     if (atexit(die) != 0)
         err(1, "Can't set die() to be called at exit");
+
+    if (pthread_mutexattr_init(&mutex_pshared) != 0)
+        errx(1, "Can't initialize mutex attributes object");
+    if (pthread_mutexattr_setpshared(&mutex_pshared,
+            PTHREAD_PROCESS_SHARED) != 0)
+        errx(1, "Can't set mutexattr to process-shared");
+
+    if (pthread_condattr_init(&cond_pshared) != 0)
+        errx(1, "Can't initialize condition variable attributes object");
+    if (pthread_condattr_setpshared(&cond_pshared,
+            PTHREAD_PROCESS_SHARED) != 0)
+        errx(1, "Can't set condattr to process-shared");
 
     init_signals();
     state_fd = init_state();
