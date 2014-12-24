@@ -143,7 +143,7 @@ static void notify_workers(union sigval sv)
                 cmh->cmsg_len = CMSG_LEN(sizeof(data));
                 cmh->cmsg_level = SOL_SOCKET;
                 cmh->cmsg_type = SCM_RIGHTS;
-                memcpy(CMSG_DATA(cmh), &state_fd, sizeof(data));
+                memcpy(CMSG_DATA(cmh), &data, sizeof(data));
 
                 ssize_t count = sendmsg(sock, &mh, 0);
                 if (count == -1) {
