@@ -71,9 +71,13 @@ static void notify_workers(union sigval sv)
 {
     int r;  // temporary return value holder
 
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+        fputs("Reaped worker\n", stdout);
+
     struct worker* workers = sv.sival_ptr;
     for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
         struct worker* worker = &workers[i];
+
 
         r = pthread_mutex_trylock(&worker->mutex);
         if (r == EBUSY) {
@@ -191,11 +195,6 @@ worker_end:
             printf("Killing worker %d...\n", i);
             if (kill(worker->pid, SIGKILL) == -1)
                 err(1, "Can't kill worker");
-            r = waitpid(worker->pid, NULL, WNOHANG);
-            if (r == 0)
-                errx(1, "Worker didn't die");
-            else if (r == -1)
-                err(1, "Can't reap worker");
 
             if (pthread_mutex_destroy(&worker->ctl->n_mutex) != 0)
                 errx(1, "Can't destroy notification mutex");

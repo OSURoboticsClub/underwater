@@ -33,8 +33,6 @@ int main()
         nanosleep(&delay, NULL);
 
         set_thruster_data(&robot, &td);
-
-        putchar('\n');
     }
 
     while (1) { __asm(""); }  // spin forever
