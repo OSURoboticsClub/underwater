@@ -71,13 +71,13 @@ static void notify_workers(union sigval sv)
 {
     int r;  // temporary return value holder
 
+    // Reap any zombie workers.
     while (waitpid(-1, NULL, WNOHANG) > 0)
         fputs("Reaped worker\n", stdout);
 
     struct worker* workers = sv.sival_ptr;
     for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
         struct worker* worker = &workers[i];
-
 
         r = pthread_mutex_trylock(&worker->mutex);
         if (r == EBUSY) {
@@ -88,12 +88,14 @@ static void notify_workers(union sigval sv)
         }
 
         if (worker->state == DEAD) {
+            // Prevent other workers from being launched.
             r = pthread_mutex_trylock(&listener_mutex);
             if (r == EBUSY)
                 goto worker_end;
             else if (r != 0)
                 errx(1, "Can't lock listener mutex");
 
+            // Launch the worker.
             worker->pid = fork();
             if (worker->pid == 0) {
                 if (execv(workers[i].argv[0], workers[i].argv) == -1)
@@ -105,10 +107,12 @@ static void notify_workers(union sigval sv)
             worker->t = 0;
             worker->state = CONNECTING;
 
+            // Initialize the notification system.
             pthread_mutex_init(&worker->ctl->n_mutex, &mutex_pshared);
             pthread_cond_init(&worker->ctl->n_cond, &cond_pshared);
             worker->ctl->n = false;
         } else if (worker->state == CONNECTING) {
+            // Has worker connected yet?
             r = poll(&listener_poll, 1, 0);
             if (r == -1) {
                 err(1, "Can't poll on listener");
@@ -122,6 +126,7 @@ static void notify_workers(union sigval sv)
                 socklen_t socklen = sizeof(sa);
                 int sock = accept(listener_poll.fd, (struct sockaddr*)&sa,
                     &socklen);
+                // Let other workers launch.
                 if (pthread_mutex_unlock(&listener_mutex) == -1)
                     errx(1, "Can't unlock listener mutex");
                 if (sock == -1) {
@@ -130,8 +135,8 @@ static void notify_workers(union sigval sv)
                     goto worker_end;
                 }
 
+                // Put shared memory file descriptors in a control message.
                 int data[2] = {state_fd, worker->ctl_fd};
-
                 char control[CMSG_SPACE(sizeof(int))];
                 struct msghdr mh = {
                     .msg_namelen = 0,
@@ -140,7 +145,6 @@ static void notify_workers(union sigval sv)
                     .msg_controllen = sizeof(control),
                     .msg_flags = 0
                 };
-
                 struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
                 if (cmh == NULL)
                     errx(1, "Can't get first cmsghdr object");
@@ -149,6 +153,7 @@ static void notify_workers(union sigval sv)
                 cmh->cmsg_type = SCM_RIGHTS;
                 memcpy(CMSG_DATA(cmh), &data, sizeof(data));
 
+                // Send the control message to the worker.
                 ssize_t count = sendmsg(sock, &mh, 0);
                 if (count == -1) {
                     warn("Can't send shared memory object");
@@ -159,11 +164,11 @@ static void notify_workers(union sigval sv)
                 }
 
                 if (close(sock) == -1) {
-                    warn("Can't close worker socket");
-                    worker->state = DEAD;
+                    err(1, "Can't close worker socket");
                 }
             }
         } else if (worker->state == RUNNING) {
+            // Try to notify the worker.
             r = pthread_mutex_trylock(&worker->ctl->n_mutex);
             if (r == EBUSY) {
                 ++worker->t;
@@ -186,6 +191,7 @@ static void notify_workers(union sigval sv)
         }
 
 worker_end:
+        // Kill the worker if it's slow.
         if (worker->t >= 5) {
             if (worker->state == CONNECTING) {
                 if (pthread_mutex_unlock(&listener_mutex) != 0)
