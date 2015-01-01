@@ -17,9 +17,6 @@
 #include <unistd.h>
 
 
-#define WORKER_COUNT 2
-
-
 struct ucred {
     pid_t pid;
     uid_t uid;
@@ -45,6 +42,12 @@ struct worker {
 
     int ctl_fd;
     struct worker_control* ctl;
+};
+
+
+struct worker_group {
+    int count;
+    struct worker* workers;
 };
 
 
@@ -75,9 +78,9 @@ static void notify_workers(union sigval sv)
     while (waitpid(-1, NULL, WNOHANG) > 0)
         fputs("Reaped worker\n", stdout);
 
-    struct worker* workers = sv.sival_ptr;
-    for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
-        struct worker* worker = &workers[i];
+    struct worker_group* group = sv.sival_ptr;
+    for (int i = 0; i <= group->count - 1; ++i) {
+        struct worker* worker = &group->workers[i];
 
         r = pthread_mutex_trylock(&worker->mutex);
         if (r == EBUSY) {
@@ -98,7 +101,7 @@ static void notify_workers(union sigval sv)
             // Launch the worker.
             worker->pid = fork();
             if (worker->pid == 0) {
-                if (execv(workers[i].argv[0], workers[i].argv) == -1)
+                if (execv(worker->argv[0], worker->argv) == -1)
                     err(1, "Can't exec worker");
             } else if (worker->pid == -1) {
                 err(1, "Can't fork");
@@ -137,7 +140,7 @@ static void notify_workers(union sigval sv)
 
                 // Put shared memory file descriptors in a control message.
                 int data[2] = {state_fd, worker->ctl_fd};
-                char control[CMSG_SPACE(sizeof(int))];
+                char control[CMSG_SPACE(sizeof(data))];
                 struct msghdr mh = {
                     .msg_namelen = 0,
                     .msg_iovlen = 0,
@@ -182,7 +185,7 @@ static void notify_workers(union sigval sv)
             } else {
                 worker->t = 0;
                 worker->ctl->n = true;
-                fputs("Notifying worker...\n", stdout);
+                printf("Notifying worker %d...\n", i);
                 pthread_cond_signal(&worker->ctl->n_cond);
             }
 
@@ -305,10 +308,10 @@ static void init_socket()
 }
 
 
-static void init_workers(struct worker workers[])
+static void init_workers(struct worker_group* group)
 {
-    for (int i = 0; i <= WORKER_COUNT - 1; ++i) {
-        struct worker* worker = &workers[i];
+    for (int i = 0; i <= group->count - 1; ++i) {
+        struct worker* worker = &group->workers[i];
 
         pthread_mutex_init(&worker->mutex, NULL);
         worker->state = DEAD;
@@ -329,11 +332,11 @@ static void init_workers(struct worker workers[])
 }
 
 
-static void init_timer(struct worker workers[])
+static void init_timer(struct worker_group* group)
 {
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
-        .sigev_value.sival_ptr = workers,
+        .sigev_value.sival_ptr = group,
         .sigev_notify_function = notify_workers,
         .sigev_notify_attributes = NULL
     };
@@ -365,19 +368,19 @@ int main()
 
     fputs("Starting workers...\n", stdout);
 
-    static char* worker1_argv[] = {"./test", NULL};
-    static char* worker2_argv[] = {"./test", NULL};
-    static struct worker workers[WORKER_COUNT] = {
-        {.argv = worker1_argv},
-        {.argv = worker2_argv}
-    };
+    struct worker_group group = {.count = 2};
+    char* worker1_argv[] = {"./test", NULL};
+    char* worker2_argv[] = {"./test", NULL};
+    group.workers = malloc(sizeof(struct worker) * group.count);
+    group.workers[0].argv = worker1_argv;
+    group.workers[1].argv = worker2_argv;
 
     init_socket();
-    init_workers(workers);
+    init_workers(&group);
 
     fputs("Setting up timer...\n", stdout);
 
-    init_timer(workers);
+    init_timer(&group);
 
     fputs("Ready\n\n", stdout);
 

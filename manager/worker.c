@@ -24,20 +24,20 @@ struct robot init()
     if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1)
         err(1, "Can't connect to socket");
 
-    char control[CMSG_SPACE(sizeof(int)) * 2];
+    int data[2];
+    char control[CMSG_SPACE(sizeof(data))];
     struct msghdr mh = {
         .msg_name = NULL,
         .msg_namelen = 0,
         .msg_iov = NULL,
         .msg_iovlen = 0,
         .msg_control = control,
-        .msg_controllen = CMSG_SPACE(sizeof(int)) * 2,
+        .msg_controllen = CMSG_SPACE(sizeof(data)),
         .msg_flags = 0
     };
     if (recvmsg(s, &mh, 0) == -1)
         err(1, "Can't recvmsg() shared memory object");
     struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
-    int data[2];
     if (cmh == NULL)
         errx(1, "No cmsghdr object received");
     memcpy(data, CMSG_DATA(cmh), sizeof(data));
