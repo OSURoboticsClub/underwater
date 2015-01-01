@@ -22,7 +22,10 @@ int main()
     };
 
     for (int i = 0; i <= 4; ++i) {
-        wait_for_sensor_data(&robot);
+        struct sensor_data sd = wait_for_sensor_data(&robot);
+        fputs("sensors = {", stdout);
+        print_sensor_data(&sd);
+        fputs("}\n", stdout);
 
         ++td.ls;
         ++td.rs;
@@ -33,6 +36,9 @@ int main()
         nanosleep(&delay, NULL);
 
         set_thruster_data(&robot, &td);
+        fputs("thrusters = {", stdout);
+        print_thruster_data(&td);
+        fputs("}\n", stdout);
     }
 
     while (1) { __asm(""); }  // spin forever

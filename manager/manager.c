@@ -216,6 +216,22 @@ worker_end:
 }
 
 
+static void init_attrs()
+{
+    if (pthread_mutexattr_init(&mutex_pshared) != 0)
+        errx(1, "Can't initialize mutex attributes object");
+    if (pthread_mutexattr_setpshared(&mutex_pshared, PTHREAD_PROCESS_SHARED)
+            != 0)
+        errx(1, "Can't set mutexattr to process-shared");
+
+    if (pthread_condattr_init(&cond_pshared) != 0)
+        errx(1, "Can't initialize condition variable attributes object");
+    if (pthread_condattr_setpshared(&cond_pshared, PTHREAD_PROCESS_SHARED)
+            != 0)
+        errx(1, "Can't set condattr to process-shared");
+}
+
+
 static void init_signals()
 {
     struct sigaction act = {
@@ -342,17 +358,7 @@ int main()
     if (atexit(die) != 0)
         err(1, "Can't set die() to be called at exit");
 
-    if (pthread_mutexattr_init(&mutex_pshared) != 0)
-        errx(1, "Can't initialize mutex attributes object");
-    if (pthread_mutexattr_setpshared(&mutex_pshared,
-            PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set mutexattr to process-shared");
-
-    if (pthread_condattr_init(&cond_pshared) != 0)
-        errx(1, "Can't initialize condition variable attributes object");
-    if (pthread_condattr_setpshared(&cond_pshared,
-            PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set condattr to process-shared");
+    init_attrs();
 
     init_signals();
     state_fd = init_state();

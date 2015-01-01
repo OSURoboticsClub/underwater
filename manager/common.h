@@ -48,13 +48,13 @@ struct worker_control {
 
 inline static void print_sensor_data(struct sensor_data* data)
 {
-    printf("%"PRIu16"  %"PRIu16"  %"PRIu8"  %f  %"PRIu32"\n",
+    printf("%"PRIu16"  %"PRIu16"  %"PRIu8"  %f  %"PRIu32,
         data->a, data->b, data->c, data->d, data->e);
 }
 
 
 inline static void print_thruster_data(struct thruster_data* data)
 {
-    printf("%"PRIu8"  %"PRIu8"  %"PRIu16"  %"PRIu16"  %"PRIu16"  %"PRIu16"\n",
+    printf("%"PRIu8"  %"PRIu8"  %"PRIu16"  %"PRIu16"  %"PRIu16"  %"PRIu16,
         data->ls, data->rs, data->fl, data->fr, data->bl, data->br);
 }

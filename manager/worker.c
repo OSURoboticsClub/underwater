@@ -71,9 +71,6 @@ struct sensor_data wait_for_sensor_data(struct robot* robot)
     }
     robot->ctl->n = false;
 
-    fputs("<-- manager    ", stdout);
-    print_sensor_data(&robot->state->sensor_data);
-
     struct sensor_data sd = robot->state->sensor_data;
 
     if (pthread_mutex_unlock(&robot->ctl->n_mutex) == -1)
@@ -89,9 +86,6 @@ void set_thruster_data(struct robot* robot, struct thruster_data* td)
         errx(1, "Can't lock thruster data mutex");
 
     memcpy(&robot->state->thruster_data, td, sizeof(struct thruster_data));
-
-    fputs("--> manager    ", stdout);
-    print_thruster_data(&robot->state->thruster_data);
 
     if (pthread_mutex_unlock(&robot->state->thruster_data_mutex) == -1)
         errx(1, "Can't unlock thruster data mutex");
