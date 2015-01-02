@@ -75,7 +75,7 @@ static pthread_condattr_t cond_pshared;
 static void die()
 {
     unlink(SOCKET_FILENAME);  // Ignore errors.
-    warnx("Dying...");
+    warnx("About to die");
 
     if (pthread_mutex_lock(&timer_mutex) != 0) {
         warnx("Can't lock timer mutex");
@@ -126,7 +126,6 @@ static void notify_workers(union sigval sv)
             else if (r != 0)
                 errorx("Can't lock listener mutex");
 
-            errorx("Test error");
             // Launch the worker.
             worker->pid = fork();
             if (worker->pid == 0) {
@@ -413,11 +412,10 @@ static void init_timer(struct worker_group* group)
 
     fputs("Ready\n\n", stdout);
 
-    fputs("Waiting for quit cond\n", stdout);
     while (!should_quit)
         pthread_cond_wait(&quit_cond, &timer_mutex);
 
-    fputs("Quit cond was signaled\n", stdout);
+    warnx("Dying...");
 
     pthread_mutex_unlock(&timer_mutex);  // Ignore errors.
 }
