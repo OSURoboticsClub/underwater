@@ -62,9 +62,10 @@ static struct state* state;
 static int state_fd;
 
 
-static pthread_mutex_t die_mutex;
-static pthread_cond_t die_cond;
-static bool should_die = false;
+static pthread_mutex_t timer_mutex;
+static timer_t timerid;
+static pthread_cond_t quit_cond;
+static bool should_quit;
 
 
 static pthread_mutexattr_t mutex_pshared;
@@ -76,16 +77,24 @@ static void die()
     unlink(SOCKET_FILENAME);  // Ignore errors.
     warnx("Dying...");
 
-    if (pthread_mutex_lock(&die_mutex) != 0) {
-        warnx("Can't lock die_mutex");  // Can't call error().
+    if (pthread_mutex_lock(&timer_mutex) != 0) {
+        warnx("Can't lock timer mutex");
         return;
     }
-    if (pthread_cond_signal(&die_cond) != 0) {
-        warnx("Can't signal on die_cond");  // Can't call error().
-        return;
+
+    if (timer_delete(timerid) == -1) {
+        warn("Can't delete timer");
+        goto die_end;
     }
-    if (pthread_mutex_unlock(&die_mutex) != 0)
-        warnx("Can't unlock die_mutex");  // Can't call error().
+    should_quit = true;
+    if (pthread_cond_signal(&quit_cond) != 0)
+        warnx("Can't signal on quit condition variable");
+
+die_end:
+    if (pthread_mutex_unlock(&timer_mutex) != 0)
+        warnx("Can't unlock timer mutex");
+
+    pthread_exit(0);
 }
 
 
@@ -117,6 +126,7 @@ static void notify_workers(union sigval sv)
             else if (r != 0)
                 errorx("Can't lock listener mutex");
 
+            errorx("Test error");
             // Launch the worker.
             worker->pid = fork();
             if (worker->pid == 0) {
@@ -254,20 +264,22 @@ static void init_attrs()
 }
 
 
-static void init_signals()
-{
-    struct sigaction act = {
-        .sa_handler = die,
-        .sa_flags = 0
-    };
-    if (sigemptyset(&act.sa_mask) == -1)
-        error("Can't empty sa_mask");
-
-    if (sigaction(SIGINT, &act, NULL) == -1)
-        error("Can't set up SIGINT handler");
-    if (sigaction(SIGQUIT, &act, NULL) == -1)
-        error("Can't set up SIGQUIT handler");
-}
+/*
+ *static void init_signals()
+ *{
+ *    struct sigaction act = {
+ *        .sa_handler = die,
+ *        .sa_flags = 0
+ *    };
+ *    if (sigemptyset(&act.sa_mask) == -1)
+ *        error("Can't empty sa_mask");
+ *
+ *    if (sigaction(SIGINT, &act, NULL) == -1)
+ *        error("Can't set up SIGINT handler");
+ *    if (sigaction(SIGQUIT, &act, NULL) == -1)
+ *        error("Can't set up SIGQUIT handler");
+ *}
+ */
 
 
 static int init_state()
@@ -351,64 +363,63 @@ static void init_workers(struct worker_group* group)
 }
 
 
-static timer_t init_timer(struct worker_group* group)
+static void init_timer(struct worker_group* group)
 {
+    if (pthread_mutex_init(&timer_mutex, NULL) != 0) {
+        warnx("Can't initialize timer mutex");
+        exit(1);
+    }
+
+    if (pthread_cond_init(&quit_cond, NULL) != 0) {
+        warnx("Can't initialize quit condition variable");
+        exit(1);
+    }
+
+    if (pthread_mutex_lock(&timer_mutex) != 0) {
+        warnx("Can't lock timer mutex");
+        exit(1);
+    }
+
+    pthread_attr_t pa;
+    if (pthread_attr_init(&pa) != 0)
+        errorx("Can't initialize pthread_attr");
+    if (pthread_attr_setdetachstate(&pa, PTHREAD_CREATE_DETACHED) != 0)
+        errorx("Can't configure pthread_attr");
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
         .sigev_value.sival_ptr = group,
         .sigev_notify_function = notify_workers,
-        .sigev_notify_attributes = NULL
+        .sigev_notify_attributes = &pa,
     };
-    timer_t timerid;
+
+    // Create timer.
     if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1)
         error("Can't create timer");
+
+    if (pthread_attr_destroy(&pa) != 0)
+        errorx("Can't destroy pthread_attr");
 
     struct itimerspec its;
     its.it_interval.tv_sec = 1;  // every second
     its.it_interval.tv_nsec = 0;
     its.it_value.tv_sec = 0;  // arm timer
     its.it_value.tv_nsec = 1;
+
+    // Start timer.
     if (timer_settime(timerid, 0, &its, NULL) == -1)
         error("Can't arm timer");
 
-    return timerid;
-}
+    should_quit = false;
 
+    fputs("Ready\n\n", stdout);
 
-static void init_killer()
-{
-    if (pthread_mutex_init(&die_mutex, &mutex_pshared) == -1)
-        warnx("Can't initialize die_mutex");
-    if (pthread_cond_init(&die_cond, &cond_pshared) == -1)
-        warnx("Can't initialize die_cond");
-}
+    fputs("Waiting for quit cond\n", stdout);
+    while (!should_quit)
+        pthread_cond_wait(&quit_cond, &timer_mutex);
 
+    fputs("Quit cond was signaled\n", stdout);
 
-static void quit(timer_t timerid)
-{
-    fputs("Deleting timer...\n", stdout);
-    if (timer_delete(timerid) == -1)
-        warn("Can't delete timer");
-}
-
-
-void wait_for_death(timer_t timerid)
-{
-    if (pthread_mutex_lock(&die_mutex) != 0) {
-        warnx("Can't lock die_mutex");
-        goto die;
-    }
-    while (!should_die) {
-        if (pthread_cond_wait(&die_cond, &die_mutex) != 0) {
-            warnx("Can't wait on die_cond");
-            goto die;
-        }
-    }
-    if (pthread_mutex_unlock(&die_mutex) != 0) {
-        warnx("Can't lock die_mutex");
-    }
-die:
-    quit(timerid);
+    pthread_mutex_unlock(&timer_mutex);  // Ignore errors.
 }
 
 
@@ -418,7 +429,7 @@ void init_manager(int worker_count, char*** argvv)
 
     init_attrs();
 
-    init_signals();
+    /*init_signals();*/
     state_fd = init_state();
 
     fputs("Starting workers...\n", stdout);
@@ -435,24 +446,26 @@ void init_manager(int worker_count, char*** argvv)
 
     fputs("Setting up timer...\n", stdout);
 
-    init_killer();
-    timer_t timerid = init_timer(&group);
-
-    fputs("Ready\n\n", stdout);
-
-    wait_for_death(timerid);
+    init_timer(&group);
 }
 
 
 int main()
 {
-    char* argv[2] = {"./test", NULL};
     char** argvv[2];
-    argvv[0] = malloc(sizeof(argv) * 2);
-    memcpy(&argvv[0], argv, sizeof(argv));
+    char* argv[2] = {"./test", NULL};
+    argvv[0] = malloc(sizeof(argv));
+    if (argvv[0] == NULL) {
+        warnx("Can't allocate memory");
+        return 1;
+    }
+    memcpy(argvv[0], argv, sizeof(argv));
     argvv[1] = malloc(sizeof(argv));
-    memcpy(&argvv[1], argv, sizeof(argv));
+    if (argvv[1] == NULL) {
+        warnx("Can't allocate memory");
+        return 1;
+    }
+    memcpy(argvv[1], argv, sizeof(argv));
 
     init_manager(2, argvv);
-    exit(1);
 }
