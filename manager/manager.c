@@ -82,6 +82,7 @@ static void die()
         return;
     }
 
+    printf("timerid = %p\n", timerid);
     if (timer_delete(timerid) == -1) {
         warn("Can't delete timer");
         goto die_end;
@@ -394,6 +395,7 @@ static void init_timer(struct worker_group* group)
     // Create timer.
     if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1)
         error("Can't create timer");
+    printf("timerid = %p\n", timerid);
 
     if (pthread_attr_destroy(&pa) != 0)
         errorx("Can't destroy pthread_attr");
@@ -445,25 +447,4 @@ void init_manager(int worker_count, char*** argvv)
     fputs("Setting up timer...\n", stdout);
 
     init_timer(&group);
-}
-
-
-int main()
-{
-    char** argvv[2];
-    char* argv[2] = {"./test", NULL};
-    argvv[0] = malloc(sizeof(argv));
-    if (argvv[0] == NULL) {
-        warnx("Can't allocate memory");
-        return 1;
-    }
-    memcpy(argvv[0], argv, sizeof(argv));
-    argvv[1] = malloc(sizeof(argv));
-    if (argvv[1] == NULL) {
-        warnx("Can't allocate memory");
-        return 1;
-    }
-    memcpy(argvv[1], argv, sizeof(argv));
-
-    init_manager(2, argvv);
 }
