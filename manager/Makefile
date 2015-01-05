@@ -1,5 +1,5 @@
 CFLAGS := -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter
-CFLAGS += -Wno-missing-field-initializers -pedantic -g
+CFLAGS += -Wno-unused-function -Wno-missing-field-initializers -pedantic -g
 
 all: manager test libworker.so
 

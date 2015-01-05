@@ -1,7 +1,7 @@
 #include "common.h"
+#include "error.h"
 
 #include <assert.h>
-#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -16,8 +16,11 @@
 #include <time.h>
 #include <unistd.h>
 
-#define thread_err(str) do { warn(str); die(); } while (0)
-#define thread_errx(str) do { warnx(str); die(); } while (0)
+
+#define warning(msg) warning_helper(prog_name, msg)
+#define error(msg) error_helper(prog_name, msg)
+#define warning_e(msg) warning_e_helper(prog_name, msg, errno)
+#define error_e(msg) error_e_helper(prog_name, msg, errno)
 
 
 struct ucred {
@@ -54,8 +57,11 @@ struct worker_group {
 };
 
 
-pthread_mutex_t listener_mutex;
-struct pollfd listener_poll;  // poll() argument
+static char* prog_name;
+
+
+static pthread_mutex_t listener_mutex;
+static struct pollfd listener_poll;  // poll() argument
 
 
 static struct state* state;
@@ -74,20 +80,34 @@ static pthread_condattr_t cond_pshared;
 
 static void die()
 {
-    warnx("About to die");
+    warning("About to die");
 
     if (pthread_mutex_lock(&timer_mutex) != 0) {
-        warnx("Can't lock timer mutex");
+        warning("Can't lock timer mutex");
         return;
     }
 
     should_quit = true;
     if (pthread_cond_signal(&quit_cond) != 0)
-        warnx("Can't signal on quit condition variable");
+        warning("Can't signal on quit condition variable");
 
     if (pthread_mutex_unlock(&timer_mutex) != 0)
-        warnx("Can't unlock timer mutex");
+        warning("Can't unlock timer mutex");
+}
 
+
+static void thread_error(char* str)
+{
+    warning(str);
+    die();
+    pthread_exit(NULL);
+}
+
+
+static void thread_error_e(char* str)
+{
+    warning_e(str);
+    die();
     pthread_exit(NULL);
 }
 
@@ -106,10 +126,10 @@ static void notify_workers(union sigval sv)
 
         r = pthread_mutex_trylock(&worker->mutex);
         if (r == EBUSY) {
-            warnx("communicate() is slow");
+            warning("communicate() is slow");
             continue;
         } else if (r != 0) {
-            thread_errx("Can't lock worker mutex");
+            thread_error("Can't lock worker mutex");
         }
 
         if (worker->state == DEAD) {
@@ -118,7 +138,7 @@ static void notify_workers(union sigval sv)
             if (r == EBUSY)
                 goto worker_end;
             else if (r != 0)
-                thread_errx("Can't lock listener mutex");
+                thread_error("Can't lock listener mutex");
 
             // Launch the worker.
             worker->pid = fork();
@@ -126,9 +146,9 @@ static void notify_workers(union sigval sv)
                 if (execv(worker->argv[0], worker->argv) == -1)
                     // We can't call thread_error here, since the main thread
                     // is in the parent process.
-                    warn("Can't exec worker");
+                    warning_e("Can't exec worker");
             } else if (worker->pid == -1) {
-                thread_err("Can't fork");
+                thread_error_e("Can't fork");
             }
 
             worker->t = 0;
@@ -142,10 +162,11 @@ static void notify_workers(union sigval sv)
             // Has worker connected yet?
             r = poll(&listener_poll, 1, 0);
             if (r == -1) {
-                thread_err("Can't poll on listener");
+                thread_error_e("Can't poll on listener");
             } else if (r == 0) {
                 ++worker->t;
-                warnx("Worker %d is slow to connect (t = %d)", i, worker->t);
+                printf("Worker %d is slow to connect (t = %d)\n", i,
+                    worker->t);
             } else {
                 struct sockaddr_un sa;
                 sa.sun_family = AF_UNIX;
@@ -155,9 +176,9 @@ static void notify_workers(union sigval sv)
                     &socklen);
                 // Let other workers launch.
                 if (pthread_mutex_unlock(&listener_mutex) == -1)
-                    thread_errx("Can't unlock listener mutex");
+                    thread_error("Can't unlock listener mutex");
                 if (sock == -1) {
-                    warnx("Can't accept connection on listener socket");
+                    warning("Can't accept connection on listener socket");
                     worker->state = DEAD;
                     goto worker_end;
                 }
@@ -174,7 +195,7 @@ static void notify_workers(union sigval sv)
                 };
                 struct cmsghdr* cmh = CMSG_FIRSTHDR(&mh);
                 if (cmh == NULL)
-                    thread_errx("Can't get first cmsghdr object");
+                    thread_error("Can't get first cmsghdr object");
                 cmh->cmsg_len = CMSG_LEN(sizeof(data));
                 cmh->cmsg_level = SOL_SOCKET;
                 cmh->cmsg_type = SCM_RIGHTS;
@@ -183,7 +204,7 @@ static void notify_workers(union sigval sv)
                 // Send the control message to the worker.
                 ssize_t count = sendmsg(sock, &mh, 0);
                 if (count == -1) {
-                    warn("Can't send shared memory object");
+                    warning_e("Can't send shared memory object");
                     worker->state = DEAD;
                 } else {
                     worker->t = 0;
@@ -191,7 +212,7 @@ static void notify_workers(union sigval sv)
                 }
 
                 if (close(sock) == -1) {
-                    thread_err("Can't close worker socket");
+                    thread_error_e("Can't close worker socket");
                 }
             }
         } else if (worker->state == RUNNING) {
@@ -199,13 +220,13 @@ static void notify_workers(union sigval sv)
             r = pthread_mutex_trylock(&worker->ctl->n_mutex);
             if (r == EBUSY) {
                 ++worker->t;
-                warnx("Worker %d is slow to ack (t = %d)", i, worker->t);
+                printf("Worker %d is slow to ack (t = %d)\n", i, worker->t);
                 goto worker_end;
             } else if (r != 0) {
-                thread_errx("Can't lock worker notification mutex");
+                thread_error("Can't lock worker notification mutex");
             } else if (worker->ctl->n) {
                 ++worker->t;
-                warnx("Worker %d is slow to ack (t = %d)", i, worker->t);
+                printf("Worker %d is slow to ack (t = %d)\n", i, worker->t);
             } else {
                 worker->t = 0;
                 worker->ctl->n = true;
@@ -214,7 +235,7 @@ static void notify_workers(union sigval sv)
             }
 
             if (pthread_mutex_unlock(&worker->ctl->n_mutex) == -1)
-                thread_errx("Can't unlock worker notification mutex");
+                thread_error("Can't unlock worker notification mutex");
         }
 
 worker_end:
@@ -222,23 +243,23 @@ worker_end:
         if (worker->t >= 5) {
             if (worker->state == CONNECTING) {
                 if (pthread_mutex_unlock(&listener_mutex) != 0)
-                    thread_errx("Can't unlock listener mutex");
+                    thread_error("Can't unlock listener mutex");
             }
 
             printf("Killing worker %d...\n", i);
             if (kill(worker->pid, SIGKILL) == -1)
-                thread_err("Can't kill worker");
+                thread_error_e("Can't kill worker");
 
             if (pthread_mutex_destroy(&worker->ctl->n_mutex) != 0)
-                thread_errx("Can't destroy notification mutex");
+                thread_error("Can't destroy notification mutex");
             if (pthread_cond_destroy(&worker->ctl->n_cond) != 0)
-                thread_errx("Can't destroy notification condition variable");
+                thread_error("Can't destroy notification condition variable");
 
             worker->state = DEAD;
         }
 
         if (pthread_mutex_unlock(&worker->mutex) != 0)
-            thread_err("Can't unlock worker mutex");
+            thread_error("Can't unlock worker mutex");
     }
 }
 
@@ -246,50 +267,48 @@ worker_end:
 static void init_attrs()
 {
     if (pthread_mutexattr_init(&mutex_pshared) != 0)
-        errx(1, "Can't initialize mutex attributes object");
+        error("Can't initialize mutex attributes object");
     if (pthread_mutexattr_setpshared(&mutex_pshared, PTHREAD_PROCESS_SHARED)
             != 0)
-        errx(1, "Can't set mutexattr to process-shared");
+        error("Can't set mutexattr to process-shared");
 
     if (pthread_condattr_init(&cond_pshared) != 0)
-        errx(1, "Can't initialize condition variable attributes object");
+        error("Can't initialize condition variable attributes object");
     if (pthread_condattr_setpshared(&cond_pshared, PTHREAD_PROCESS_SHARED)
             != 0)
-        errx(1, "Can't set condattr to process-shared");
+        error("Can't set condattr to process-shared");
 }
 
 
-/*
- *static void init_signals()
- *{
- *    struct sigaction act = {
- *        .sa_handler = die,
- *        .sa_flags = 0
- *    };
- *    if (sigemptyset(&act.sa_mask) == -1)
- *        err(1, "Can't empty sa_mask");
- *
- *    if (sigaction(SIGINT, &act, NULL) == -1)
- *        err(1, "Can't set up SIGINT handler");
- *    if (sigaction(SIGQUIT, &act, NULL) == -1)
- *        err(1, "Can't set up SIGQUIT handler");
- *}
- */
+static void init_signals()
+{
+    struct sigaction act = {
+        .sa_handler = die,
+        .sa_flags = 0
+    };
+    if (sigemptyset(&act.sa_mask) == -1)
+        error("Can't empty sa_mask");
+
+    if (sigaction(SIGINT, &act, NULL) == -1)
+        error("Can't set up SIGINT handler");
+    if (sigaction(SIGQUIT, &act, NULL) == -1)
+        error("Can't set up SIGQUIT handler");
+}
 
 
 static int init_state()
 {
     int mem = shm_open("/robot", O_RDWR | O_CREAT, 0);
     if (mem == -1)
-        err(1, "Can't open shared memory object");
+        error("Can't open shared memory object");
     if (shm_unlink("/robot") == -1)
-        err(1, "Can't unlink shared memory object");
+        error("Can't unlink shared memory object");
     if (ftruncate(mem, sizeof(struct state)) == -1)
-        err(1, "Can't set size of shared memory object");
+        error("Can't set size of shared memory object");
     state = mmap(NULL, sizeof(struct state), PROT_READ | PROT_WRITE,
         MAP_SHARED, mem, 0);
     if (state == NULL)
-        err(1, "Can't mmap() shared memory object");
+        error("Can't mmap() shared memory object");
 
     state->sensor_data.a = 6000;
     state->sensor_data.b = 12345;
@@ -299,15 +318,15 @@ static int init_state()
 
     pthread_mutexattr_t ma;
     if (pthread_mutexattr_init(&ma) != 0)
-        errx(1, "Can't initialize mutex attributes object");
+        error("Can't initialize mutex attributes object");
     if (pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED) != 0)
-        errx(1, "Can't set mutex to process-shared");
+        error("Can't set mutex to process-shared");
 
     pthread_mutex_init(&state->sensor_data_mutex, &ma);
     pthread_mutex_init(&state->thruster_data_mutex, &ma);
 
     if (pthread_mutexattr_destroy(&ma) != 0)
-        errx(1, "Can't destroy mutex attributes object");
+        error("Can't destroy mutex attributes object");
 
     return mem;
 }
@@ -317,17 +336,17 @@ static void init_socket()
 {
     int listener = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (listener == -1)
-        err(1, "Can't create socket");
+        error_e("Can't create socket");
 
     struct sockaddr_un sa;
     sa.sun_family = AF_UNIX;
     strcpy(sa.sun_path, SOCKET_FILENAME);
     unlink(SOCKET_FILENAME);  // Ignore errors.
     if (bind(listener, (struct sockaddr*)&sa, sizeof(sa)) == -1)
-        err(1, "Can't bind socket");
+        error_e("Can't bind socket");
 
     if (listen(listener, 1) == -1)
-        err(1, "Can't listen on socket");
+        error_e("Can't listen on socket");
 
     listener_poll.fd = listener;
     listener_poll.events = POLLIN;
@@ -345,15 +364,15 @@ static void init_workers(struct worker_group* group)
 
         worker->ctl_fd = shm_open("/robot", O_RDWR | O_CREAT, 0);
         if (worker->ctl_fd == -1)
-            err(1, "Can't open shared memory object");
+            error_e("Can't open shared memory object");
         if (shm_unlink("/robot") == -1)
-            err(1, "Can't unlink shared memory object");
+            error_e("Can't unlink shared memory object");
         if (ftruncate(worker->ctl_fd, sizeof(struct worker_ctl)) == -1)
-            err(1, "Can't set size of shared memory object");
+            error_e("Can't set size of shared memory object");
         worker->ctl = mmap(NULL, sizeof(struct worker_ctl),
             PROT_READ | PROT_WRITE, MAP_SHARED, worker->ctl_fd, 0);
         if (worker->ctl == NULL)
-            err(1, "Can't mmap() shared memory object");
+            error_e("Can't mmap() shared memory object");
     }
 }
 
@@ -361,21 +380,21 @@ static void init_workers(struct worker_group* group)
 static void init_timer(struct worker_group* group)
 {
     if (pthread_mutex_init(&timer_mutex, NULL) != 0)
-        errx(1, "Can't initialize timer mutex");
+        error("Can't initialize timer mutex");
 
     if (pthread_cond_init(&quit_cond, NULL) != 0)
-        errx(1, "Can't initialize quit condition variable");
+        error("Can't initialize quit condition variable");
 
     if (pthread_mutex_lock(&timer_mutex) != 0)
-        errx(1, "Can't lock timer mutex");
+        error("Can't lock timer mutex");
 
     should_quit = false;
 
     pthread_attr_t pa;
     if (pthread_attr_init(&pa) != 0)
-        errx(1, "Can't initialize pthread_attr");
+        error("Can't initialize pthread_attr");
     if (pthread_attr_setdetachstate(&pa, PTHREAD_CREATE_DETACHED) != 0)
-        errx(1, "Can't configure pthread_attr");
+        error("Can't configure pthread_attr");
 
     // When timer expires, call notify_worker(group) in a new thread.
     struct sigevent sev = {
@@ -387,10 +406,10 @@ static void init_timer(struct worker_group* group)
 
     // Create timer.
     if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1)
-        err(1, "Can't create timer");
+        error_e("Can't create timer");
 
     if (pthread_attr_destroy(&pa) != 0)
-        errx(1, "Can't destroy pthread_attr");
+        error_e("Can't destroy pthread_attr");
 
     struct itimerspec its;
     its.it_interval.tv_sec = 1;  // every second
@@ -400,7 +419,7 @@ static void init_timer(struct worker_group* group)
 
     // Start timer.
     if (timer_settime(timerid, 0, &its, NULL) == -1)
-        err(1, "Can't arm timer");
+        error_e("Can't arm timer");
 
     fputs("Ready\n\n", stdout);
 
@@ -409,10 +428,10 @@ static void init_timer(struct worker_group* group)
         pthread_cond_wait(&quit_cond, &timer_mutex);
     }
 
-    warnx("Dying...");
+    warning("Dying...");
 
     if (timer_delete(timerid) == -1) {
-        warn("Can't delete timer");
+        warning_e("Can't delete timer");
     }
 
     pthread_mutex_unlock(&timer_mutex);  // Ignore errors.
@@ -421,13 +440,15 @@ static void init_timer(struct worker_group* group)
 }
 
 
-void init_manager(int worker_count, char*** argvv)
+void init_manager(char* name, int worker_count, char*** argvv)
 {
     fputs("Initializing...\n", stdout);
 
+    prog_name = name;
+
     init_attrs();
 
-    /*init_signals();*/
+    init_signals();
     state_fd = init_state();
 
     fputs("Starting workers...\n", stdout);
