@@ -8,7 +8,7 @@
 int main()
 {
     char** argvv[2];
-    char* argv[2] = {"./test", NULL};
+    char* argv[] = {"./test", NULL};
     argvv[0] = malloc(sizeof(argv));
     if (argvv[0] == NULL) {
         warnx("Can't allocate memory");
@@ -23,4 +23,7 @@ int main()
     memcpy(argvv[1], argv, sizeof(argv));
 
     init_manager(2, argvv);
+
+    free(argvv[0]);
+    free(argvv[1]);
 }

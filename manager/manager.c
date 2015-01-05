@@ -74,7 +74,6 @@ static pthread_condattr_t cond_pshared;
 
 static void die()
 {
-    unlink(SOCKET_FILENAME);  // Ignore errors.
     warnx("About to die");
 
     if (pthread_mutex_lock(&timer_mutex) != 0) {
@@ -82,20 +81,14 @@ static void die()
         return;
     }
 
-    printf("timerid = %p\n", timerid);
-    if (timer_delete(timerid) == -1) {
-        warn("Can't delete timer");
-        goto die_end;
-    }
     should_quit = true;
     if (pthread_cond_signal(&quit_cond) != 0)
         warnx("Can't signal on quit condition variable");
 
-die_end:
     if (pthread_mutex_unlock(&timer_mutex) != 0)
         warnx("Can't unlock timer mutex");
 
-    pthread_exit(0);
+    pthread_exit(NULL);
 }
 
 
@@ -374,11 +367,15 @@ static void init_timer(struct worker_group* group)
     if (pthread_mutex_lock(&timer_mutex) != 0)
         errx(1, "Can't lock timer mutex");
 
+    should_quit = false;
+
     pthread_attr_t pa;
     if (pthread_attr_init(&pa) != 0)
         errx(1, "Can't initialize pthread_attr");
     if (pthread_attr_setdetachstate(&pa, PTHREAD_CREATE_DETACHED) != 0)
         errx(1, "Can't configure pthread_attr");
+
+    // When timer expires, call notify_worker(group) in a new thread.
     struct sigevent sev = {
         .sigev_notify = SIGEV_THREAD,
         .sigev_value.sival_ptr = group,
@@ -403,16 +400,24 @@ static void init_timer(struct worker_group* group)
     if (timer_settime(timerid, 0, &its, NULL) == -1)
         err(1, "Can't arm timer");
 
-    should_quit = false;
-
     fputs("Ready\n\n", stdout);
 
-    while (!should_quit)
+    // Wait until a thread tells us to quit.
+    while (!should_quit) {
+        fputs("Waiting on quit_cond...\n", stdout);
         pthread_cond_wait(&quit_cond, &timer_mutex);
+        fputs("Woke up\n", stdout);
+    }
 
     warnx("Dying...");
 
+    if (timer_delete(timerid) == -1) {
+        warn("Can't delete timer");
+    }
+
     pthread_mutex_unlock(&timer_mutex);  // Ignore errors.
+
+    unlink(SOCKET_FILENAME);  // Ignore errors.
 }
 
 
