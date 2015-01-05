@@ -124,7 +124,9 @@ static void notify_workers(union sigval sv)
             worker->pid = fork();
             if (worker->pid == 0) {
                 if (execv(worker->argv[0], worker->argv) == -1)
-                    thread_err("Can't exec worker");
+                    // We can't call thread_error here, since the main thread
+                    // is in the parent process.
+                    warn("Can't exec worker");
             } else if (worker->pid == -1) {
                 thread_err("Can't fork");
             }
@@ -404,9 +406,7 @@ static void init_timer(struct worker_group* group)
 
     // Wait until a thread tells us to quit.
     while (!should_quit) {
-        fputs("Waiting on quit_cond...\n", stdout);
         pthread_cond_wait(&quit_cond, &timer_mutex);
-        fputs("Woke up\n", stdout);
     }
 
     warnx("Dying...");
