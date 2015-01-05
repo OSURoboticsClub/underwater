@@ -39,7 +39,7 @@ struct state {
 };
 
 
-struct worker_control {
+struct worker_ctl {
     pthread_mutex_t n_mutex;
     pthread_cond_t n_cond;
     bool n;

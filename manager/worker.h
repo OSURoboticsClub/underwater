@@ -6,7 +6,7 @@
 
 struct robot {
     struct state* state;
-    struct worker_control* ctl;
+    struct worker_ctl* ctl;
 };
 
 

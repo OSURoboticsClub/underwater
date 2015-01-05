@@ -44,7 +44,7 @@ struct worker {
     int t;  // ticks since last ack
 
     int ctl_fd;
-    struct worker_control* ctl;
+    struct worker_ctl* ctl;
 };
 
 
@@ -353,9 +353,9 @@ static void init_workers(struct worker_group* group)
             error("Can't open shared memory object");
         if (shm_unlink("/robot") == -1)
             error("Can't unlink shared memory object");
-        if (ftruncate(worker->ctl_fd, sizeof(struct worker_control)) == -1)
+        if (ftruncate(worker->ctl_fd, sizeof(struct worker_ctl)) == -1)
             error("Can't set size of shared memory object");
-        worker->ctl = mmap(NULL, sizeof(struct worker_control),
+        worker->ctl = mmap(NULL, sizeof(struct worker_ctl),
             PROT_READ | PROT_WRITE, MAP_SHARED, worker->ctl_fd, 0);
         if (worker->ctl == NULL)
             error("Can't mmap() shared memory object");
