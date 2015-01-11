@@ -1,4 +1,0 @@
-mkdir -p lib/opencv/build
-cd lib/opencv/build
-cmake ..
-make
