@@ -2,6 +2,7 @@
 #include "manager.h"
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,7 +23,9 @@ int main(int argc, char* argv[])
         error_e("Can't allocate memory");
     memcpy(progs[1], prog, sizeof(prog));
 
-    init_manager(argv[0], 2, progs);
+    bool do_heartbeat[2] = {true, false};
+
+    init_manager(argv[0], 2, progs, do_heartbeat);
 
     free(progs[0]);
     free(progs[1]);
