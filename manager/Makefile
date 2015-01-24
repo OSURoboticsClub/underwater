@@ -1,19 +1,12 @@
 CFLAGS := -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter
 CFLAGS += -Wno-unused-function -Wno-missing-field-initializers -pedantic -g
+HPATH := -I../manager
 
-all: manager test libworker.so
+CC = gcc $(CFLAGS) $(HPATH)
 
-manager: main.c manager.c
-	gcc $(CFLAGS) $^ -lrt -lpthread -o $@
 
-test: test.c worker.c
-	gcc $(CFLAGS) $^ -lpthread -o $@
+../manager/manager.o: ../manager/manager.c
+	$(CC) -c -o $@ $^
 
-libworker.so:
-	gcc $(CFLAGS) -shared -fpic worker.c -lpthread -o $@
-
-clean:
-	rm -f manager test libworker.so
-
-.DEFAULT_GOAL := all
-.PHONY: clean
+../manager/libworker.so: ../manager/worker.c
+	$(CC) -shared -fpic -o $@ $^ -lpthread
