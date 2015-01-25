@@ -24,10 +24,10 @@ struct sensor_data {
 struct thruster_data {
     uint8_t ls;
     uint8_t rs;
-    uint16_t fl;
-    uint16_t fr;
-    uint16_t bl;
-    uint16_t br;
+    int16_t fl;
+    int16_t fr;
+    int16_t bl;
+    int16_t br;
 };
 
 
@@ -55,6 +55,6 @@ inline static void print_sensor_data(struct sensor_data* data)
 
 inline static void print_thruster_data(struct thruster_data* data)
 {
-    printf("%"PRIu8"  %"PRIu8"  %"PRIu16"  %"PRIu16"  %"PRIu16"  %"PRIu16,
+    printf("%"PRIu8"  %"PRIu8"  %"PRId16"  %"PRId16"  %"PRId16"  %"PRId16,
         data->ls, data->rs, data->fl, data->fr, data->bl, data->br);
 }
