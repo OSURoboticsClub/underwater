@@ -1,0 +1,4 @@
+this is my (scott's) version of the other program
+it has less features than the other one but it works. I'll have to add in special serial stuff later
+the program reads from the fifo/tty in the first arg and writes to the second. it only does this one for BUF_S bytes
+this should be good to build off of for serial communication
