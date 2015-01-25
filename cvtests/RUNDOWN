@@ -1,0 +1,4 @@
+hough is the cool stuff.
+delete CMakeCache and then cmake . and then make
+then do ./DisplayImage fieldGoal1.jpg
+the url source is from the README in there
