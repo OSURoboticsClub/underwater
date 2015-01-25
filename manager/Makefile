@@ -5,8 +5,8 @@ HPATH := -I../manager
 CC = gcc $(CFLAGS) $(HPATH)
 
 
-../manager/manager.o: ../manager/manager.c
-	$(CC) -c -o $@ $^
+../manager/manager.o: ../manager/manager.c ../manager/common.h ../manager/error.h
+	$(CC) -c -o $@ $<
 
-../manager/libworker.so: ../manager/worker.c
-	$(CC) -shared -fpic -o $@ $^ -lpthread
+../manager/libworker.so: ../manager/worker.c ../manager/worker.h
+	$(CC) -shared -fpic -o $@ $< -lpthread
