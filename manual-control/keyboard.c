@@ -27,9 +27,15 @@ int main()
 
     {
         struct termios term;
-        tcgetattr(STDIN_FILENO, &term);
+        if (tcgetattr(STDIN_FILENO, &term) == -1) {
+            perror("tcgetattr");
+            return 1;
+        }
         term.c_lflag &= ~(ICANON | ECHO);
-        tcsetattr(STDIN_FILENO, TCSANOW, &term);
+        if (tcsetattr(STDIN_FILENO, TCSANOW, &term) == -1) {
+            perror("tcsetattr");
+            return 1;
+        }
     }
 
     struct thruster_data td = {0}; // all zeroes
