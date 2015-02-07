@@ -22,11 +22,13 @@ int main(int argc, char **argv)
   }
   in = open(argv[1], O_RDWR | O_NOCTTY);
   out = open(argv[2], O_RDWR | O_NOCTTY);
-
-  res = read(in, buf, BUF_S);
-  //buf[res+1]='\0';
-  fwrite(buf, res, 1, stdout);
-  res = write(out, buf, BUF_S);
+  while (1)
+  {
+    res = read(in, buf, BUF_S);
+    //buf[res+1]='\0';
+    fwrite(buf, res, 1, stdout);
+    res = write(out, buf, BUF_S);
+  }
   //fflush(stdout);
   //printf("%s", buf);
 
