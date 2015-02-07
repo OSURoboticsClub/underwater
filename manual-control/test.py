@@ -39,8 +39,8 @@ w = ctypes.cdll.LoadLibrary('./libworker.so')
 w.init.argtypes = ()
 w.init.restype = Robot
 
-w.wait_for_sensor_data.argtypes = (ctypes.POINTER(Robot),)
-w.wait_for_sensor_data.restype = SensorData
+w.wait_for_tick.argtypes = (ctypes.POINTER(Robot),)
+w.wait_for_tick.restype = SensorData
 
 w.set_thruster_data.argtypes = (
     ctypes.POINTER(Robot), ctypes.POINTER(ThrusterData))

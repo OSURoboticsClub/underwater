@@ -22,7 +22,7 @@ int main()
     };
 
     for (int i = 0; i <= 4; ++i) {
-        struct sensor_data sd = wait_for_sensor_data(&robot);
+        struct sensor_data sd = wait_for_tick(&robot);
         fputs("sensors = {", stdout);
         print_sensor_data(&sd);
         fputs("}\n", stdout);

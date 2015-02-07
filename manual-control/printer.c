@@ -8,7 +8,7 @@ int main()
     fputs("test: ready\n", stdout);
 
     while (1) {
-        wait_for_sensor_data(&robot);
+        wait_for_tick(&robot);
 
         fputs("thrusters = {", stdout);
         print_thruster_data(&robot.state->thruster_data);

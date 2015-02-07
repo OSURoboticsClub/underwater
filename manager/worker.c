@@ -59,7 +59,7 @@ struct robot init()
 }
 
 
-struct sensor_data wait_for_sensor_data(struct robot* robot)
+struct sensor_data wait_for_tick(struct robot* robot)
 {
     if (pthread_mutex_lock(&robot->ctl->n_mutex) == -1)
         errx(1, "Can't lock notification mutex");
