@@ -41,6 +41,8 @@ struct worker {
     pid_t pid;
     char** argv;
 
+    bool do_heartbeat;
+
     pthread_mutex_t mutex;
 
     enum worker_state state;  // worker state
@@ -220,13 +222,15 @@ static void notify_workers(union sigval sv)
             r = pthread_mutex_trylock(&worker->ctl->n_mutex);
             if (r == EBUSY) {
                 ++worker->t;
-                printf("Worker %d is slow to ack (t = %d)\n", i, worker->t);
+                printf("Worker %d is slow to ack (t = %d)\n", i,
+                    worker->t);
                 goto worker_end;
             } else if (r != 0) {
                 thread_error("Can't lock worker notification mutex");
-            } else if (worker->ctl->n) {
+            } else if (worker->do_heartbeat && worker->ctl->n) {
                 ++worker->t;
-                printf("Worker %d is slow to ack (t = %d)\n", i, worker->t);
+                printf("Worker %d is slow to ack (t = %d)\n", i,
+                    worker->t);
             } else {
                 worker->t = 0;
                 worker->ctl->n = true;
@@ -440,7 +444,8 @@ static void init_timer(struct worker_group* group)
 }
 
 
-void init_manager(char* name, int worker_count, char*** argvv)
+void init_manager(char* name, int worker_count, char*** argvv,
+        bool do_heartbeat[])
 {
     fputs("Initializing...\n", stdout);
 
@@ -458,6 +463,7 @@ void init_manager(char* name, int worker_count, char*** argvv)
     group.workers = malloc(sizeof(struct worker) * worker_count);
     for (int i = 0; i <= worker_count - 1; ++i) {
         group.workers[i].argv = argvv[i];
+        group.workers[i].do_heartbeat = do_heartbeat[i];
     }
 
     init_socket();
