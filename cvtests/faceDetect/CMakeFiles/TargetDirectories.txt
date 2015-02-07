@@ -1,0 +1,1 @@
+/home/chobe/proj/opencv/faceDetect/CMakeFiles/DisplayImage.dir
