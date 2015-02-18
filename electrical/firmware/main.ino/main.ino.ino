@@ -8,6 +8,11 @@ void setup() {
   Serial2.begin(9600);
   Serial3.begin(9600);
   
+  // Initialize IMU
+  accelBegin();
+  magnoBegin();
+  gyroBegin();
+  
   current_state = idle;
   watchdog_counter = 0;
 }
@@ -20,7 +25,10 @@ void loop() {
     // TODO: Parse incoming packet
     current_state = commanded_state;
     if (commanded_state == talk or commanded_state == run) {
-      // TODO: Read sensors
+      // Reads sensors
+      accelRead();
+      magnoRead();
+      gyroRead();
       // TODO: Populate return packet
     }
     if (commanded_state == run) {
