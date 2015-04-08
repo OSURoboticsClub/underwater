@@ -11,4 +11,4 @@ fi
 
 source $ENV/bin/activate
 
-pip install 'http://pygame.org/ftp/pygame-1.9.1release.tar.gz'
+pip install 'http://pygame.org/ftp/pygame-1.9.1release.tar.gz' pyserial==2.7
