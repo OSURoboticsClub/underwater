@@ -1,9 +1,14 @@
+import sys
 import time
 import socket
 import pyjoy
 import serial
 import pygame
 from math import *
+
+
+joy_idx = int(sys.argv[1])
+
 
 MAX_MOTOR_VALUE = 180 # Sets the highest motor value that is able to be sent to the Arduino
 MIN_MOTOR_VALUE = 25 # Sets the lowest motor value that is able to be sent to the Arduino
@@ -30,11 +35,10 @@ def getArduinoData(joyAxis, joyButtons):
     # Build and output command list
     return [motorA, motorB, motorC, motorD, buttonMap]
 
-joy = []
 recvstr = "  "
 
 # A list of axis values from the joystick
-joyAxis = [0,0,0,0]
+joyAxis = [0,0,0,0,0,0]
 # Each boolean represents the value from the corresponding joystick button
 joyButtons = [False, False, False, False, False, False]
 
@@ -50,12 +54,16 @@ pygame.display.init()
 if not pygame.joystick.get_count():
     print"\nplug in a joystick\n"
     quit()
-print "\n%d joystick(s) detected" % pygame.joystick.get_count()
-for i in range(pygame.joystick.get_count()):
-    myjoy = pygame.joystick.Joystick(i)
-    myjoy.init()
-    joy.append(myjoy)
-    print "Depress lower rack of buttons to quit\n"
+
+myjoy = pygame.joystick.Joystick(joy_idx)
+myjoy.init()
+
+print 'Wait a second and then press a button on the joystick'
+start_time = time.time()
+while time.time() - start_time < 0.5:
+    pygame.event.wait()
+
+print "Depress lower rack of buttons to quit\n"
 
 command = [0,0,0,0,0,0]
 
@@ -63,6 +71,7 @@ while True:
     e = pygame.event.wait()
     if (e.type == pygame.JOYAXISMOTION or e.type == pygame.JOYBUTTONDOWN or e.type == pygame.JOYBUTTONUP):
         # Read and change information in joyAxis or joyButtons
+        print e
         if e.type == pygame.JOYBUTTONDOWN:
             if (e.dict['button'] in range(6,12)):
                 print "Bye!\n"
@@ -120,8 +129,8 @@ while True:
 
         # Build and output command list
         command = [int(motorA), int(motorB), int(motorC), int(motorD), motorDirection, buttonMap]
-    MESSAGE = [chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]), chr(command[4]), chr(command[5])]
-    sock.sendto("".join(MESSAGE), (UDP_IP, UDP_PORT))
-    recvstr = sock.recv(4096)
-    print "MESSAGE = {} {} {} {} {} {}".format(ord(MESSAGE[0]), ord(MESSAGE[1]), ord(MESSAGE[2]), ord(MESSAGE[3]), ord(MESSAGE[4]), ord(MESSAGE[5]))
-    print "Received: {} {} {} {} {} {}".format(ord(recvstr[0]), ord(recvstr[1]), ord(recvstr[2]), ord(recvstr[3]), ord(recvstr[4]), ord(recvstr[5]))
+    #MESSAGE = [chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]), chr(command[4]), chr(command[5])]
+    #sock.sendto("".join(MESSAGE), (UDP_IP, UDP_PORT))
+    #recvstr = sock.recv(4096)
+    #print "MESSAGE = {} {} {} {} {} {}".format(ord(MESSAGE[0]), ord(MESSAGE[1]), ord(MESSAGE[2]), ord(MESSAGE[3]), ord(MESSAGE[4]), ord(MESSAGE[5]))
+    #print "Received: {} {} {} {} {} {}".format(ord(recvstr[0]), ord(recvstr[1]), ord(recvstr[2]), ord(recvstr[3]), ord(recvstr[4]), ord(recvstr[5]))
