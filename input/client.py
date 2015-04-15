@@ -6,20 +6,23 @@ import socket
 import pyjoy
 import serial
 import pygame
-from math import *
+from math import atan, cos, pi, sin, sqrt
 
 
-MAX_MOTOR_VALUE = 180 # Sets the highest motor value that is able to be sent to the Arduino
-MIN_MOTOR_VALUE = 25 # Sets the lowest motor value that is able to be sent to the Arduino
+MAX_MOTOR_VALUE = 180
+MIN_MOTOR_VALUE = 25
 
 
-def getArduinoData(joyAxis, joyButtons):
-    """Gets passed all axis and button info from the joystick and returns a list
-    containing four motor values and a button map to send to the Arduino"""
+def get_arduino_data(joyAxis, joyButtons):
+    """
+    Gets passed all axis and button info from the joystick and returns a list
+    containing four motor values and a button map to send to the Arduino
+    """
     xAxis = joyAxis[0]
     yAxis = joyAxis[1]
     rotAxis = joyAxis[2]
-    # Joystick x and y are converted into polar coordinates and rotated 45 degrees
+    # Joystick x and y are converted into polar coordinates and rotated 45
+    # degrees
     mag = sqrt(xAxis**2 + yAxis**2)
     theta = atan(yAxis/xAxis) + pi/4
     motorA = mag*cos(theta)/2
@@ -36,6 +39,25 @@ def getArduinoData(joyAxis, joyButtons):
     return [motorA, motorB, motorC, motorD, buttonMap]
 
 
+def connect():
+    UDP_IP = "192.168.1.177"
+    UDP_PORT = 8888
+    print "UDP target IP:", UDP_IP
+    print "UDP target port:", UDP_PORT
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+
+def init_joystick(joy_idx):
+    pygame.joystick.init()
+    pygame.display.init()
+    j = pygame.joystick.Joystick(joy_idx)
+    j.init()
+
+    start_time = time.time()
+    while time.time() - start_time < 0.25:
+        pygame.event.wait()
+
+
 def main(joy_idx):
     recvstr = "  "
 
@@ -44,34 +66,18 @@ def main(joy_idx):
     # Each boolean represents the value from the corresponding joystick button
     joyButtons = [False, False, False, False, False, False]
 
-    UDP_IP = "192.168.1.177"
-    UDP_PORT = 8888
-
-    print "UDP target IP:", UDP_IP
-    print "UDP target port:", UDP_PORT
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    pygame.joystick.init()
-    pygame.display.init()
-    if not pygame.joystick.get_count():
-        print"\nplug in a joystick\n"
-        quit()
-
-    myjoy = pygame.joystick.Joystick(joy_idx)
-    myjoy.init()
-
-    print 'Wait a second and then press a button on the joystick'
-    start_time = time.time()
-    while time.time() - start_time < 0.5:
-        pygame.event.wait()
-
-    print "Depress lower rack of buttons to quit\n"
+    print 'Press any button on the base to quit'
 
     command = [0,0,0,0,0,0]
 
+    sock = connect()
+    init_joystick(joy_idx)
+
     while True:
         e = pygame.event.wait()
-        if (e.type == pygame.JOYAXISMOTION or e.type == pygame.JOYBUTTONDOWN or e.type == pygame.JOYBUTTONUP):
+        if (e.type == pygame.JOYAXISMOTION or
+                e.type == pygame.JOYBUTTONDOWN or
+                e.type == pygame.JOYBUTTONUP):
             # Read and change information in joyAxis or joyButtons
             #print e
             if e.type == pygame.JOYBUTTONDOWN:
@@ -97,7 +103,8 @@ def main(joy_idx):
             yAxis = -joyAxis[1]
             rotAxis = joyAxis[2]
 
-            # Joystick x and y are converted into polar coordinates and rotated 45 degrees
+            # Joystick x and y are converted into polar coordinates and rotated
+            # 45 degrees
             mag = sqrt(xAxis**2 + yAxis**2)
             if mag > 1:
                 mag = 1
@@ -110,7 +117,8 @@ def main(joy_idx):
             motorC = motorB
             motorD = motorA
 
-            # Motor direction sent as a binary number with each bit representing the motors A-D
+            # Motor direction sent as a binary number with each bit
+            # representing the motors A-D
             # x x x x
             # A B C D
             motorDirection = 0
@@ -130,8 +138,11 @@ def main(joy_idx):
                     buttonMap |= 2**index
 
             # Build and output command list
-            command = [int(motorA), int(motorB), int(motorC), int(motorD), motorDirection, buttonMap]
-        MESSAGE = [chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]), chr(command[4]), chr(command[5])]
+            command = [int(motorA), int(motorB), int(motorC), int(motorD),
+                motorDirection, buttonMap]
+        MESSAGE = [
+            chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]),
+            chr(command[4]), chr(command[5])]
         print MESSAGE
         #sock.sendto("".join(MESSAGE), (UDP_IP, UDP_PORT))
         #recvstr = sock.recv(4096)
@@ -143,5 +154,4 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         print 'Usage: client.py JOYSTICK_NUMBER'
         exit(2)
-
     main(int(sys.argv[1]))
