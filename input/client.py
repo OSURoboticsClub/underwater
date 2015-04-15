@@ -76,7 +76,7 @@ while True:
     e = pygame.event.wait()
     if (e.type == pygame.JOYAXISMOTION or e.type == pygame.JOYBUTTONDOWN or e.type == pygame.JOYBUTTONUP):
         # Read and change information in joyAxis or joyButtons
-        print e
+        #print e
         if e.type == pygame.JOYBUTTONDOWN:
             if (e.dict['button'] in range(6,12)):
                 print "Bye!\n"
@@ -134,7 +134,8 @@ while True:
 
         # Build and output command list
         command = [int(motorA), int(motorB), int(motorC), int(motorD), motorDirection, buttonMap]
-    #MESSAGE = [chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]), chr(command[4]), chr(command[5])]
+    MESSAGE = [chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]), chr(command[4]), chr(command[5])]
+    print MESSAGE
     #sock.sendto("".join(MESSAGE), (UDP_IP, UDP_PORT))
     #recvstr = sock.recv(4096)
     #print "MESSAGE = {} {} {} {} {} {}".format(ord(MESSAGE[0]), ord(MESSAGE[1]), ord(MESSAGE[2]), ord(MESSAGE[3]), ord(MESSAGE[4]), ord(MESSAGE[5]))
