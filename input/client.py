@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import sys
 import time
 import socket
@@ -7,6 +9,9 @@ import pygame
 from math import *
 
 
+if len(sys.argv) != 2:
+    print 'Usage: client.py JOYSTICK_NUMBER'
+    exit(2)
 joy_idx = int(sys.argv[1])
 
 
