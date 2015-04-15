@@ -48,17 +48,14 @@ def connect():
 
 
 def init_joystick(joy_idx):
-    print "Don't touch the joystick"
-
     pygame.joystick.init()
     pygame.display.init()
     j = pygame.joystick.Joystick(joy_idx)
     j.init()
 
-    while pygame.event.poll().type != 0:
-        pass
-
-    print 'Ready'
+    print "Flushing event queue (don't touch the joystick)..."
+    pygame.event.get()
+    print '\nReady'
 
 
 def send_command(command):
