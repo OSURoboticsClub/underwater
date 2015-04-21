@@ -5,7 +5,6 @@
 
 
 #include <Wire.h>
-#include <Arduino.h>
 
 /* Accelerometer Registers */
 typedef enum
