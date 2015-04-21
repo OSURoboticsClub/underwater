@@ -53,6 +53,9 @@ void loop() {
 				ST3.motor(2, motorCommand.vertRight);
 			}
 		}
+		if (commanded_state == error) {
+			EStop();
+		}
 		ethernetWrite();
 	}
 	else {
@@ -61,7 +64,7 @@ void loop() {
 		if (watchdogCounter > 1000) {
 			// We've lost communication
 			current_state = error;
-			// TODO: Return error packet
+			EStop();
 		}
 	}
 }
