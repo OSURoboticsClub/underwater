@@ -1,8 +1,13 @@
 #include "main.h"
+#include "SabertoothSimplified.h"
+#include "SerialUnderwaterROV.h"
+#include <Ethernet.h>
+#include <EthernetUdp.h>
+#include <SPI.h>
+#include <Wire.h>
 
 void setup() {
-  // Setup communication with ITX-Box
-  Serial.begin(9600);
+  // Setup UDP Communication to control computer
   // Setup communication with Saberteeth
   Serial1.begin(9600);
   Serial2.begin(9600);
@@ -14,13 +19,13 @@ void setup() {
   gyroBegin();
   
   current_state = idle;
-  watchdog_counter = 0;
+  watchdogCounter = 0;
 }
 
 void loop() {
   if (Serial.available() > 0) {
     // We have communication with the master
-    watchdog_counter = 0;
+    watchdogCounter = 0;
     // TODO: Authentication packet
     // TODO: Parse incoming packet
     current_state = commanded_state;
@@ -46,8 +51,8 @@ void loop() {
   }
   else {
     // No packet was recieved, increment counter and wait
-    watchdog_counter++;
-    if (watchdog_counter > 100) {
+    watchdogCounter++;
+    if (watchdogCounter > 1000) {
       // We've lost communication
       current_state = error;
       // TODO: Return error packet

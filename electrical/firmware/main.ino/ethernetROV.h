@@ -1,5 +1,6 @@
 #include <Ethernet.h>
-#include <EthernetUDP.h>
+#include <EthernetUdp.h>
+#include <SPI.h>
 
 // MAC address determined by hardware on Ethernet Shield
 // IP address needs to be on same network as control computer
@@ -11,13 +12,39 @@ unsigned int localPort = 8888;
 
 // Buffers for receiving and sending data
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE];
-char ReplyBuffer[UDP_RX_PACKET_MAX_SIZE];
+char ReplyBuffer[UDP_TX_PACKET_MAX_SIZE];
 
+// Communicated variables
+// Define states
+enum STATE {
+  idle,
+  talk,
+  run,
+  error
+} current_state, commanded_state;
+
+struct motors {
+	int frontLeft;
+	int frontRight;
+	int backLeft;
+	int backRight;
+	int vertLeft;
+	int vertRight;
+} motorCommand;
+
+struct armServos {
+	int elbow;
+	int wrist;
+	int grasp;
+} armCommand;
+
+int counter;
+int filler = 0;
 
 EthernetUDP Udp;
 
 void ethernetSetup() {
-	Ethernt.setup(mac, ip);
+	Ethernet.begin(mac, ip);
 	Udp.begin(localPort);
 }
 
@@ -26,7 +53,7 @@ int ethernetRead() {
 		Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
 
 		// Administrative Information
-		commanded_state				= packetBuffer[0];
+		commanded_state				= (STATE)packetBuffer[0];
 		counter						= packetBuffer[1];
 
 		// Thruster Commands
@@ -54,5 +81,27 @@ void ethernetWrite() {
 
 	// Response State
 	Udp.write(counter);
-	Udp.write(accelData.x)
+
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+	Udp.write(filler);
+
+	Udp.endPacket();
 }

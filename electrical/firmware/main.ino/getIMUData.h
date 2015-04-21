@@ -3,7 +3,6 @@
 #define L3GD20_ADDRESS (0x6B)        // 1101011
 #define SENSORS_DPS_TO_RADS (0.017453293F)          /**< Degrees/s to rad/s multiplier */
 
-
 #include <Wire.h>
 
 /* Accelerometer Registers */
@@ -116,13 +115,39 @@ struct gyroData_t
   int16_t z;
 } gyroData;
 
-void setup()
+// Data Structures for UDP packet communication
+/* Data structure to store accleration data in the different axis. */
+struct accelDataPacketized_t
 {
-  Serial.begin(9800);
-  gyroBegin();
-  magnoBegin();
-  accelBegin();
-}
+  int xHi;
+  int xLo;
+  int yHi;
+  int yLo;
+  int zHi;
+  int zLo;
+} accelDataPacketized;
+
+/* Data structure to store magnometer data in the different axis. */
+struct magnoDataPacketized_t
+{
+  int xHi;
+  int xLo;
+  int yHi;
+  int yLo;
+  int zHi;
+  int zLo;
+} magnoDataPacketized;
+
+/* Data structure to hold gyroscope data. */
+struct gyroDataPacketized_t
+{
+  int xHi;
+  int xLo;
+  int yHi;
+  int yLo;
+  int zHi;
+  int zLo;
+} gyroDataPacketized;
 
 /* Initializes the acclerometer by writing to it. */
 void accelBegin()
@@ -153,6 +178,14 @@ void gyroBegin()
   Wire.write((uint8_t)0x00);
   Wire.write((uint8_t)0x0F);
   Wire.endTransmission();
+}
+
+void IMUSetup()
+{
+  Serial.begin(9800);
+  gyroBegin();
+  magnoBegin();
+  accelBegin();
 }
 
 /* Gets data from the accelerometer and stores it. */
@@ -220,4 +253,28 @@ void gyroRead()
    gyroData.x *= SENSORS_DPS_TO_RADS;
    gyroData.y *= SENSORS_DPS_TO_RADS;
    gyroData.z *= SENSORS_DPS_TO_RADS;
+}
+
+// Format data into high and low bytes for transmission over UDP
+void IMUPacketize() {
+	accelDataPacketized.xHi = (int)(accelData.x >> 8);
+	accelDataPacketized.xLo = (int)(accelData.x | 0xFF);
+	accelDataPacketized.yHi = (int)(accelData.y >> 8);
+	accelDataPacketized.yLo = (int)(accelData.x | 0xFF);
+	accelDataPacketized.zHi = (int)(accelData.z >> 8);
+	accelDataPacketized.zLo = (int)(accelData.x | 0xFF);
+
+	magnoDataPacketized.xHi = (int)(magnoData.x >> 8);
+	magnoDataPacketized.xLo = (int)(magnoData.x | 0xFF);
+	magnoDataPacketized.yHi = (int)(magnoData.y >> 8);
+	magnoDataPacketized.yLo = (int)(magnoData.x | 0xFF);
+	magnoDataPacketized.zHi = (int)(magnoData.z >> 8);
+	magnoDataPacketized.zLo = (int)(magnoData.x | 0xFF); 
+
+	gyroDataPacketized.xHi = (int)(gyroData.x >> 8);
+	gyroDataPacketized.xLo = (int)(gyroData.x | 0xFF);
+	gyroDataPacketized.yHi = (int)(gyroData.y >> 8);
+	gyroDataPacketized.yLo = (int)(gyroData.x | 0xFF);
+	gyroDataPacketized.zHi = (int)(gyroData.z >> 8);
+	gyroDataPacketized.zLo = (int)(gyroData.x | 0xFF); 
 }
