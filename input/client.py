@@ -75,12 +75,10 @@ def send_command(command):
     return recvstr
 
 def main(joy_idx):
-    # A list of axis values from the joystick
-    joyAxis = [0,0,0,0,0,0]
-    # Each boolean represents the value from the corresponding joystick button
-    joyButtons = [False, False, False, False, False, False]
+    stick = [0] * 6
+    buttons = [False] * 6
 
-    command = [0,0,0,0,0,0]
+
 
     sock = connect()
     init_joystick(joy_idx)
@@ -90,36 +88,34 @@ def main(joy_idx):
     while True:
         if time.time() >= transmit_time:
             transmit_time += .25
-            print command
+            print stick, buttons
 
         e = pygame.event.poll()
         if e.type not in (pygame.JOYAXISMOTION, pygame.JOYBUTTONDOWN,
                 pygame.JOYBUTTONUP):
             continue
         # Read and change information in joyAxis or joyButtons
-        #print e
         if e.type == pygame.JOYBUTTONDOWN:
-            if (e.dict['button'] in range(6,12)):
-                print "Bye!\n"
-                quit()
-            else:
-                joyButtons[e.dict['button']] = True
+            num = e.dict['button']
+            if num in range(6, 12):
+                print 'Bye!'
+                return
+            buttons[e.dict['button']] = True
 
         if e.type == pygame.JOYBUTTONUP:
-            if (e.dict['button'] in range(0,6)):
-                joyButtons[e.dict['button']] = False
+            buttons[e.dict['button']] = False
 
         if e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
-            joyAxis[axis] = value
+            stick[axis] = value
 
         # Construct Arduino command from all data
-        xAxis = joyAxis[0]
+        xAxis = stick[0]
         if xAxis == 0: # Prevents a divide by zero error
             xAxis = 10**-24
-        yAxis = -joyAxis[1]
-        rotAxis = joyAxis[2]
+        yAxis = -stick[1]
+        rotAxis = stick[2]
 
         # Joystick x and y are converted into polar coordinates and rotated
         # 45 degrees
@@ -134,30 +130,6 @@ def main(joy_idx):
         motorB *= 2 * MAX_MOTOR_VALUE
         motorC = motorB
         motorD = motorA
-
-        # Motor direction sent as a binary number with each bit
-        # representing the motors A-D
-        # x x x x
-        # A B C D
-        motorDirection = 0
-        if xAxis > yAxis:
-            motorDirection &= 0b1001
-        else:
-            motorDirection |= 0b0110
-        if -xAxis > yAxis:
-            motorDirection &= 0b0110
-        else:
-            motorDirection |= 0b1001
-
-        # Create a binary button map from joyButtons
-        buttonMap = 0
-        for index, value in enumerate(joyButtons):
-            if value:
-                buttonMap |= 2**index
-
-        # Build and output command list
-        command = [int(motorA), int(motorB), int(motorC), int(motorD),
-            motorDirection, buttonMap]
 
 
 if __name__ == '__main__':
