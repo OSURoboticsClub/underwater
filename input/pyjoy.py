@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
 
-
 import serial
 
 import pygame
-
 
 
 # allow multiple joysticks
@@ -13,11 +11,8 @@ import pygame
 joy = []
 
 
-
 # handle joystick event
-
 def handleJoyEvent(e):
-
     if e.type == pygame.JOYAXISMOTION:
         axis = "unknown"
         if (e.dict['axis'] == 0):
@@ -36,7 +31,6 @@ def handleJoyEvent(e):
             str = "Axis: %s; Value: %f" % (axis, e.dict['value'])
             # uncomment to debug
             #print str
-
     elif e.type == pygame.JOYBUTTONDOWN:
         str = "Button: %d" % (e.dict['button'])
         # uncomment to debug
@@ -48,9 +42,11 @@ def handleJoyEvent(e):
     else:
         pass
 
+
 # print the joystick position
 def output(line, stick):
     print "Joystick: %d; %s" % (stick, line)
+
 
 # wait for joystick input
 def joystickControl():
@@ -58,6 +54,7 @@ def joystickControl():
         e = pygame.event.wait()
         if (e.type == pygame.JOYAXISMOTION or e.type == pygame.JOYBUTTONDOWN):
             handleJoyEvent(e)
+
 
 # main method
 def joyinit():
@@ -77,6 +74,7 @@ def joyinit():
 
     # run joystick listener loop
     joystickControl()
+
 
 # allow use as a module or standalone script
 if __name__ == "__main__":
