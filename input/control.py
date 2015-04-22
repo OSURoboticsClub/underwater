@@ -1,16 +1,43 @@
 #!/usr/bin/env python2
 
-import sys
-import time
-import socket
+from __future__ import unicode_literals
+
+import errno
+import pygame
 import pyjoy
 import serial
-import pygame
+import socket
+import sys
+import time
 from math import atan, cos, pi, sin, sqrt
 
 
 MAX_MOTOR_VALUE = 180
 MIN_MOTOR_VALUE = 25
+
+
+def itb16(i):
+    return (i >> 8, i & (2**8 - 1))
+
+
+def clamp8(i):
+    return max(min(i, 127), -128)
+
+
+def clamp16(i):
+    return max(min(i, 32767), -32768)
+
+
+def fti8(f):
+    return clamp8(int(f * 128))
+
+
+def fti16(f):
+    return clamp16(int(f * 32768))
+
+
+def format_msg(msg):
+    return ''.join('%02x' % (byte % 256) for byte in msg)
 
 
 def get_arduino_data(joyAxis, joyButtons):
@@ -39,12 +66,35 @@ def get_arduino_data(joyAxis, joyButtons):
     return [motorA, motorB, motorC, motorD, buttonMap]
 
 
-def connect():
-    UDP_IP = "192.168.1.177"
-    UDP_PORT = 8888
-    print "UDP target IP:", UDP_IP
-    print "UDP target port:", UDP_PORT
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+class Peer(object):
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.local_addr = ('0.0.0.0', port)
+        self.remote_addr = (host, port)
+        self.remote_addr_str = '{}:{}'.format(host, port)
+
+    def connect(self):
+        print 'Connecting to {}:{}'.format(self.host, self.port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(('0.0.0.0', self.port))
+        self.sock.setblocking(0)
+
+    def send(self, state, fl, fr, br, bl, l, r, s1, s2, s3):
+        msg = (state, fl, fr, br, bl, l, r) + itb16(s1) + itb16(s2) + itb16(s3)
+        self.sock.sendto(
+            b''.join(chr(byte % 256) for byte in msg), 0, self.remote_addr)
+        print 'Sent message ' + format_msg(msg)
+
+    def recv(self):
+        try:
+            msg = self.sock.recv(1000)
+            print 'Received message'
+            return msg
+        except socket.error as e:
+            if e.errno not in (errno.EAGAIN, errno.EWOULDBLOCK):
+                raise
+            return
 
 
 def init_joystick(joy_idx):
@@ -58,82 +108,56 @@ def init_joystick(joy_idx):
     print '\nReady'
 
 
-def send_command(command):
-    message = [
-        chr(command[0]), chr(command[1]), chr(command[2]), chr(command[3]),
-        chr(command[4]), chr(command[5])]
-    print message
-    sock.sendto("".join(MESSAGE), (UDP_IP, UDP_PORT))
-    recvstr = sock.recv(4096)
-    print "send   {} {} {} {} {} {}".format(
-        ord(MESSAGE[0]), ord(MESSAGE[1]), ord(MESSAGE[2]), ord(MESSAGE[3]),
-        ord(MESSAGE[4]), ord(MESSAGE[5]))
-    print "recv   {} {} {} {} {} {}".format(
-        ord(recvstr[0]), ord(recvstr[1]), ord(recvstr[2]), ord(recvstr[3]),
-        ord(recvstr[4]), ord(recvstr[5]))
-
-    return recvstr
-
-def main(joy_idx):
+def main(joy_idx, host, port):
     stick = [0] * 6
     buttons = [False] * 6
 
-
-
-    sock = connect()
+    peer = Peer(host, port)
+    peer.connect()
     init_joystick(joy_idx)
 
     transmit_time = time.time()
 
+    fl = fr = bl = br = l = r = 0
+
     while True:
+        msg = peer.recv()
         if time.time() >= transmit_time:
             transmit_time += .25
             print stick, buttons
+            peer.send(0, fl, fr, br, bl, l, r, 0, 0, 0)
 
+        # Get next event.
         e = pygame.event.poll()
         if e.type not in (pygame.JOYAXISMOTION, pygame.JOYBUTTONDOWN,
                 pygame.JOYBUTTONUP):
             continue
-        # Read and change information in joyAxis or joyButtons
+
+        # Handle event.
         if e.type == pygame.JOYBUTTONDOWN:
             num = e.dict['button']
             if num in range(6, 12):
                 print 'Bye!'
                 return
             buttons[e.dict['button']] = True
-
-        if e.type == pygame.JOYBUTTONUP:
+        elif e.type == pygame.JOYBUTTONUP:
             buttons[e.dict['button']] = False
-
-        if e.type == pygame.JOYAXISMOTION:
+        elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
             stick[axis] = value
 
-        # Construct Arduino command from all data
-        xAxis = stick[0]
-        if xAxis == 0: # Prevents a divide by zero error
-            xAxis = 10**-24
-        yAxis = -stick[1]
-        rotAxis = stick[2]
+        x = stick[0]
+        y = -stick[1]
+        z = stick[2]
 
-        # Joystick x and y are converted into polar coordinates and rotated
-        # 45 degrees
-        mag = sqrt(xAxis**2 + yAxis**2)
-        if mag > 1:
-            mag = 1
-        theta = atan(yAxis/xAxis) + pi/4
-        #print theta/pi
-        motorA = abs(mag*sin(theta)/2)
-        motorA *= 2 * MAX_MOTOR_VALUE # Values usable by the Arduino Servo library
-        motorB = abs(mag*cos(theta)/2)
-        motorB *= 2 * MAX_MOTOR_VALUE
-        motorC = motorB
-        motorD = motorA
+        fl = br = clamp8(int(256 * (sqrt(2) / 4 * (x + y))))
+        fr = bl = clamp8(int(256 * (sqrt(2) / 4 * (-x + y))))
+        l = r = clamp8(256 * (int(buttons[4]) - int(buttons[2])))
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print 'Usage: client.py JOYSTICK_NUMBER'
+    if len(sys.argv) != 4:
+        print 'Usage: client.py JOY# HOST PORT'
         exit(2)
-    main(int(sys.argv[1]))
+    main(int(sys.argv[1]), sys.argv[2], int(sys.argv[3]))
