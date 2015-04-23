@@ -5,6 +5,7 @@
 #include <EthernetUdp.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <Servo.h>
 
 void setup() {
 	// Setup UDP Communication to control computer
@@ -16,12 +17,18 @@ void setup() {
 	
 	// Initialize IMU
 	IMUSetup();
+
+	// Attach Servo Pins
+	elbowServo.attach(3);
+	wristServo.attach(5);
+	graspServo.attach(6);
 	
 	current_state = idle;
 	watchdogCounter = 0;
 }
 
 void loop() {
+	counter++;
 	if (ethernetRead()) {
 		// We have communication with the master
 		watchdogCounter = 0;
@@ -51,6 +58,10 @@ void loop() {
 
 				ST3.motor(1, motorCommand.vertLeft);
 				ST3.motor(2, motorCommand.vertRight);
+
+				elbowServo.write(armCommand.elbow);
+				wristServo.write(armCommand.wrist);
+				graspServo.write(armCommand.grasp);
 			}
 		}
 		if (commanded_state == error) {
@@ -67,4 +78,5 @@ void loop() {
 			EStop();
 		}
 	}
+	delay(1);
 }

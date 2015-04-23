@@ -38,7 +38,7 @@ struct armServos {
 	int grasp;
 } armCommand;
 
-int counter;
+int counter = 0;
 int filler = 0;
 
 EthernetUDP Udp;
@@ -54,20 +54,19 @@ int ethernetRead() {
 
 		// Administrative Information
 		commanded_state				= (STATE)packetBuffer[0];
-		counter						= packetBuffer[1];
 
 		// Thruster Commands
-		motorCommand.frontLeft		= packetBuffer[2];
-		motorCommand.frontRight		= packetBuffer[3];
-		motorCommand.backLeft		= packetBuffer[4];
-		motorCommand.backRight		= packetBuffer[5];
-		motorCommand.vertLeft		= packetBuffer[6];
-		motorCommand.vertRight		= packetBuffer[7];
+		motorCommand.frontLeft		= packetBuffer[1];
+		motorCommand.frontRight		= packetBuffer[2];
+		motorCommand.backLeft		= packetBuffer[3];
+		motorCommand.backRight		= packetBuffer[4];
+		motorCommand.vertLeft		= packetBuffer[5];
+		motorCommand.vertRight		= packetBuffer[6];
 
 		// Arm Positions
-		armCommand.elbow			= packetBuffer[8];
-		armCommand.wrist			= packetBuffer[9];
-		armCommand.grasp			= packetBuffer[10];
+		armCommand.elbow			= packetBuffer[7];
+		armCommand.wrist			= packetBuffer[8];
+		armCommand.grasp			= packetBuffer[9];
 
 		return 1;
 	}
