@@ -11,10 +11,4 @@ fi
 
 source $ENV/bin/activate
 
-pip install numpy==1.9.1
-
-mkdir -p vision/lib/opencv/buil
-pushd vision/lib/opencv/build
-cmake ..
-make
-popd
+pip install 'http://pygame.org/ftp/pygame-1.9.1release.tar.gz' pyserial==2.7
