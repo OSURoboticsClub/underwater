@@ -95,8 +95,7 @@ class Arduino(object):
 
     def recv(self):
         try:
-            msg = self.sock.recv(1000)
-            print 'Received message'
+            msg = self.sock.recv(1)
             return msg
         except socket.error as e:
             if e.errno not in (errno.EAGAIN, errno.EWOULDBLOCK):
@@ -135,15 +134,23 @@ def main(joy_idx, host, port):
 
     while True:
         msg = ard.recv()
+        if msg:
+            print 'counter = %02x' % ord(msg)
+            print
         tick = time.time() >= transmit_time
         if tick:
-            s1 = 90 + 90 * int(stick[4])
-            s2 = 90 + 90 * int(stick[5])
-            s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
+            if not estop:
+                s1 = 90 + 90 * int(stick[4])
+                s2 = 90 + 90 * int(stick[5])
+                s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
 
             transmit_time += .25
             print stick, buttons
             ard.send(estop, fl, fr, br, bl, l, r, s1, s2, s3)
+            print
+
+        if estop:
+            continue
 
         # Get next event.
         e = pygame.event.poll()
