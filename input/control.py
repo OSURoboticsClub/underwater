@@ -28,6 +28,10 @@ def clamp16(i):
     return max(min(i, 32767), -32768)
 
 
+def clamp16u(i):
+    return max(min(i, 65536), 0)
+
+
 def fti8(f):
     return clamp8(int(f * 128))
 
@@ -66,7 +70,7 @@ def get_arduino_data(joyAxis, joyButtons):
     return [motorA, motorB, motorC, motorD, buttonMap]
 
 
-class Peer(object):
+class Arduino(object):
     def __init__(self, host, port):
         self.host = host
         self.port = port
@@ -98,6 +102,8 @@ class Peer(object):
 
 
 def init_joystick(joy_idx):
+    print '=== Setting up ===\n'
+
     pygame.joystick.init()
     pygame.display.init()
     j = pygame.joystick.Joystick(joy_idx)
@@ -105,27 +111,36 @@ def init_joystick(joy_idx):
 
     print "Flushing event queue (don't touch the joystick)..."
     pygame.event.get()
-    print '\nReady'
+    print 'Event queue flushed'
+    print '\n=== Ready ===\n'
 
 
 def main(joy_idx, host, port):
     stick = [0] * 6
     buttons = [False] * 6
 
-    peer = Peer(host, port)
-    peer.connect()
+    ard = Arduino(host, port)
+    ard.connect()
     init_joystick(joy_idx)
 
     transmit_time = time.time()
 
     fl = fr = bl = br = l = r = 0
 
+    estop = 0
+    s1 = s2 = s3 = 0
+
     while True:
-        msg = peer.recv()
-        if time.time() >= transmit_time:
+        msg = ard.recv()
+        tick = time.time() >= transmit_time
+        if tick:
+            s1 = clamp16u(s1 + int(stick[4]))
+            s2 = clamp16u(s2 + int(stick[5]))
+            s3 = clamp16u(s3 + int(buttons[0]) - int(buttons[1]))
+
             transmit_time += .25
             print stick, buttons
-            peer.send(0, fl, fr, br, bl, l, r, 0, 0, 0)
+            ard.send(estop, fl, fr, br, bl, l, r, s1, s2, s3)
 
         # Get next event.
         e = pygame.event.poll()
@@ -136,12 +151,13 @@ def main(joy_idx, host, port):
         # Handle event.
         if e.type == pygame.JOYBUTTONDOWN:
             num = e.dict['button']
-            if num in range(6, 12):
-                print 'Bye!'
-                return
-            buttons[e.dict['button']] = True
+            if 6 <= num < 12:
+                estop = 1
+            else:
+                buttons[e.dict['button']] = True
         elif e.type == pygame.JOYBUTTONUP:
-            buttons[e.dict['button']] = False
+            if not (6 <= num < 12):
+                buttons[e.dict['button']] = False
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
@@ -150,10 +166,11 @@ def main(joy_idx, host, port):
         x = stick[0]
         y = -stick[1]
         z = stick[2]
+        sc = (-stick[3] + 1.0) / 2.0
 
-        fl = br = clamp8(int(256 * (sqrt(2) / 4 * (x + y))))
-        fr = bl = clamp8(int(256 * (sqrt(2) / 4 * (-x + y))))
-        l = r = clamp8(256 * (int(buttons[4]) - int(buttons[2])))
+        fl = br = clamp8(int(sc * 128 * (sqrt(2) / 2 * (x + y))))
+        fr = bl = clamp8(int(sc * 128 * (sqrt(2) / 2 * (-x + y))))
+        l = r = clamp8(int(sc * 128 * (int(buttons[4]) - int(buttons[2]))))
 
 
 if __name__ == '__main__':
