@@ -9,11 +9,11 @@ import serial
 import socket
 import sys
 import time
-from math import atan, cos, pi, sin, sqrt
+from math import sqrt
+from sys import stdout
 
 
-MAX_MOTOR_VALUE = 180
-MIN_MOTOR_VALUE = 25
+ROT_SC = 0.1
 
 
 def itb16(i):
@@ -41,7 +41,10 @@ def fti16(f):
 
 
 def format_msg(msg):
-    return ''.join('%02x' % (byte % 256) for byte in msg)
+    return (
+        ''.join('%02x' % (byte % 256) for byte in msg) + '\n' +
+        '  '.join('% 3d' % (byte % 256) for byte in msg) + '\n'
+    )
 
 
 def get_arduino_data(joyAxis, joyButtons):
@@ -85,10 +88,10 @@ class Arduino(object):
         self.sock.setblocking(0)
 
     def send(self, state, fl, fr, br, bl, l, r, s1, s2, s3):
-        msg = (state, fl, fr, br, bl, l, r) + itb16(s1) + itb16(s2) + itb16(s3)
+        msg = (state, fl, fr, br, bl, l, r, s1, s2, s3)
         self.sock.sendto(
             b''.join(chr(byte % 256) for byte in msg), 0, self.remote_addr)
-        print 'Sent message ' + format_msg(msg)
+        stdout.write(format_msg(msg).encode('utf8'))
 
     def recv(self):
         try:
@@ -134,9 +137,9 @@ def main(joy_idx, host, port):
         msg = ard.recv()
         tick = time.time() >= transmit_time
         if tick:
-            s1 = clamp16u(s1 + int(stick[4]))
-            s2 = clamp16u(s2 + int(stick[5]))
-            s3 = clamp16u(s3 + int(buttons[0]) - int(buttons[1]))
+            s1 = 90 + 90 * int(stick[4])
+            s2 = 90 + 90 * int(stick[5])
+            s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
 
             transmit_time += .25
             print stick, buttons
@@ -165,12 +168,27 @@ def main(joy_idx, host, port):
 
         x = stick[0]
         y = -stick[1]
-        z = stick[2]
+        z = -stick[2]
         sc = (-stick[3] + 1.0) / 2.0
 
-        fl = br = clamp8(int(sc * 128 * (sqrt(2) / 2 * (x + y))))
-        fr = bl = clamp8(int(sc * 128 * (sqrt(2) / 2 * (-x + y))))
-        l = r = clamp8(int(sc * 128 * (int(buttons[4]) - int(buttons[2]))))
+        fl = br = sqrt(2) / 2 * (x + y)
+        fr = bl = sqrt(2) / 2 * (-x + y)
+        l = r = int(buttons[4]) - int(buttons[2])
+
+        # rot is counter-clockwise
+        rot = ROT_SC * z
+        fl += -rot
+        fr += rot
+        br += rot
+        bl += -rot
+
+        # TODO: Make this prettier.
+        fl = clamp8(int(128 * sc * fl))
+        fr = clamp8(int(128 * sc * fr))
+        br = clamp8(int(128 * sc * br))
+        bl = clamp8(int(128 * sc * bl))
+        l = clamp8(int(128 * sc * l))
+        r = clamp8(int(128 * sc * r))
 
 
 if __name__ == '__main__':
