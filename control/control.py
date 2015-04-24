@@ -16,6 +16,13 @@ from sys import stdout
 ROT_SC = 0.1
 
 
+class State(object):
+    IDLE = 0
+    TALK = 1
+    RUN = 2
+    ERROR = 3
+
+
 def itb16(i):
     return (i >> 8, i & (2**8 - 1))
 
@@ -129,7 +136,7 @@ def main(joy_idx, host, port):
 
     fl = fr = bl = br = l = r = 0
 
-    estop = 0
+    state = State.RUN
     s1 = s2 = s3 = 0
 
     while True:
@@ -139,17 +146,17 @@ def main(joy_idx, host, port):
             print
         tick = time.time() >= transmit_time
         if tick:
-            if not estop:
+            if state == State.RUN:
                 s1 = 90 + 90 * int(stick[4])
                 s2 = 90 + 90 * int(stick[5])
                 s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
 
             transmit_time += .25
             print stick, buttons
-            ard.send(estop, fl, fr, br, bl, l, r, s1, s2, s3)
+            ard.send(state, fl, fr, br, bl, l, r, s1, s2, s3)
             print
 
-        if estop:
+        if state == State.ERROR:
             continue
 
         # Get next event.
@@ -162,7 +169,7 @@ def main(joy_idx, host, port):
         if e.type == pygame.JOYBUTTONDOWN:
             num = e.dict['button']
             if 6 <= num < 12:
-                estop = 1
+                state = State.ERROR
             else:
                 buttons[e.dict['button']] = True
         elif e.type == pygame.JOYBUTTONUP:
