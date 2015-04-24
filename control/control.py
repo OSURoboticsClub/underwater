@@ -54,32 +54,6 @@ def format_msg(msg):
     )
 
 
-def get_arduino_data(joyAxis, joyButtons):
-    """
-    Gets passed all axis and button info from the joystick and returns a list
-    containing four motor values and a button map to send to the Arduino
-    """
-    xAxis = joyAxis[0]
-    yAxis = joyAxis[1]
-    rotAxis = joyAxis[2]
-    # Joystick x and y are converted into polar coordinates and rotated 45
-    # degrees
-    mag = sqrt(xAxis**2 + yAxis**2)
-    theta = atan(yAxis/xAxis) + pi/4
-    motorA = mag*cos(theta)/2
-    motorB = -mag*sin(theta)/2
-    motorC = motorB
-    motorD = motorA
-    # Create a binary button map from joyButtons
-    buttonMap = 0
-    for index, value in enumerate(joyButtons):
-        if value:
-            buttonMap += 2**index
-
-    # Build and output command list
-    return [motorA, motorB, motorC, motorD, buttonMap]
-
-
 class Arduino(object):
     def __init__(self, host, port):
         self.host = host
