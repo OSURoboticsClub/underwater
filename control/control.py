@@ -13,13 +13,12 @@ from math import sqrt
 from sys import stdout
 
 
-HOR_SC = 0.1
-VERT_SC = 1.0
-ROT_SC = 0.1
+HOR_SC = 1.0
+VERT_SC = 0.5
+ROT_SC = 0.3
+ROLL_SC = 0.2
 
 S1_SC = 1.0
-S2_SC = 1.0
-S3_SC = 1.0
 
 
 class State(object):
@@ -82,8 +81,8 @@ class Arduino(object):
         self.sock.bind(('0.0.0.0', self.port))
         self.sock.setblocking(0)
 
-    def send(self, state, fl, fr, br, bl, l, r, s1, s2, s3):
-        msg = (state, fl, fr, br, bl, l, r, s1, s2, s3)
+    def send(self, state, fl, fr, bl, br, l, r, s1):
+        msg = [state] + map(fti8s, (fl, fr, bl, br, l, r)) + [fti8u(s1)]
         self.sock.sendto(
             b''.join(chr(byte % 256) for byte in msg), 0, self.remote_addr)
         stdout.write(format_msg(msg).encode('utf8'))
@@ -123,7 +122,7 @@ def main(joy_idx, host, port):
     transmit_time = time.time()
 
     fl = fr = bl = br = l = r = 0
-    s1 = s2 = s3 = 90
+    s1 = 90
 
     state = State.RUN
 
@@ -136,7 +135,7 @@ def main(joy_idx, host, port):
         if tick:
             transmit_time += .25
             print stick, buttons
-            ard.send(state, fl, fr, br, bl, l, r, s1, s2, s3)
+            ard.send(state, fl, fr, bl, br, l, r, s1)
             print
 
         if state == State.ERROR:
@@ -158,7 +157,7 @@ def main(joy_idx, host, port):
                 s1 = s2 = s3 = 90
             else:
                 buttons[e.dict['button']] = (e.type == pygame.JOYBUTTONDOWN)
-                s3 = 90 + int(90.0 * S3_SC * (buttons[0] - buttons[1]))
+                s1 = 90 + int(90.0 * S1_SC * (buttons[0] - buttons[1]))
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
@@ -185,8 +184,8 @@ def main(joy_idx, host, port):
 
             l = r = fti8s(128.0 * th * VERT_SC)
 
-            s1 = 90 + int(90.0 * stick[4] * S1_SC)
-            s2 = 90 + int(90.0 * stick[5] * S2_SC)
+            l += 128.0 * stick[4] * ROLL_SC
+            r += 128.0 * -stick[4] * ROLL_SC
 
 
 if __name__ == '__main__':
