@@ -13,14 +13,14 @@ from math import sqrt
 from sys import stdout
 
 
-TIME_SC = 0.25
+TIME_SC = 0.05
 
-HOR_SC = 1.0 * TIME_SC
-VERT_SC = 0.5 * TIME_SC
-ROT_SC = 0.3 * TIME_SC
-ROLL_SC = 0.2 * TIME_SC
+HOR_SC = 1.0
+VERT_SC = 1.0
+ROT_SC = 0.6
+ROLL_SC = 0.9
 
-S1_INC = int(round(20 * TIME_SC))
+S1_INC = int(round(40 * TIME_SC))
 
 
 class State(object):
@@ -84,7 +84,7 @@ class Arduino(object):
         self.sock.setblocking(0)
 
     def send(self, state, fl, fr, bl, br, l, r, s1):
-        msg = [state] + map(fti8s, (fl, fr, bl, br, l, r)) + [fti8u(s1), 0, 0]
+        msg = [state] + map(fti8s, (fr, -fl, bl, -br, l, -r)) + [fti8u(s1), fti8u(s1), fti8u(s1)]
         self.sock.sendto(
             b''.join(chr(byte % 256) for byte in msg), 0, self.remote_addr)
         stdout.write(format_msg(msg).encode('utf8'))
@@ -136,10 +136,10 @@ def main(joy_idx, host, port):
             print
         tick = time.time() >= transmit_time
         if tick:
-            s1 = min(max(s1 + S1_INC * hy, 0), 90)
+            s1 = min(max(s1 + S1_INC * hy, 30), 120)
             transmit_time += TIME_SC
             print stick, buttons
-            ard.send(state, fl, fr, bl, br, l, r, s1)
+            ard.send(State.RUN, fl, fr, bl, br, l, r, s1)
             print
 
         if state == State.ERROR:
@@ -159,6 +159,10 @@ def main(joy_idx, host, port):
                 state = State.ERROR
                 fl = fr = br = bl = l = r = 0
                 s1 = s2 = s3 = 90
+            else:
+                buttons[e.dict['button']] = (e.type == pygame.JOYBUTTONDOWN)
+                hx = int(buttons[3]) - int(buttons[2])
+                hy = int(buttons[0]) - int(buttons[1])
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
@@ -168,8 +172,6 @@ def main(joy_idx, host, port):
             y = -stick[1]
             z = -stick[2]
             th = -stick[3]
-            hx = stick[4]
-            hy = -stick[5]
 
             fl = br = sqrt(2) / 2 * (x + y) * HOR_SC
             fr = bl = sqrt(2) / 2 * (-x + y) * HOR_SC
@@ -185,10 +187,10 @@ def main(joy_idx, host, port):
                 lambda n: fti8s(128.0 * n),
                 (fl, fr, br, bl))
 
-            l = r = fti8s(128.0 * th * VERT_SC)
 
-            l += 128.0 * hx * ROLL_SC
-            r += 128.0 * -hx * ROLL_SC
+        l = r = fti8s(128.0 * th * VERT_SC)
+        l += 128.0 * hx * ROLL_SC
+        r += 128.0 * -hx * ROLL_SC
 
 
 if __name__ == '__main__':
