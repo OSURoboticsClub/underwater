@@ -174,7 +174,7 @@ def main(joy_idx, host, port):
             bl += -rot
 
             fl, fr, br, bl = map(
-                lambda x: clamp8(int(128 * sc * HOR_SC * x)),
+                lambda n: clamp8(int(128 * sc * HOR_SC * n)),
                 (fl, fr, br, bl))
 
             s1 = 90 + 90 * int(stick[4])
