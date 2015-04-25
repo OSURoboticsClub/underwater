@@ -128,6 +128,7 @@ def main(joy_idx, host, port):
     s1 = 45
 
     state = State.RUN
+    estop = False
 
     while True:
         msg = ard.recv()
@@ -136,13 +137,14 @@ def main(joy_idx, host, port):
             print
         tick = time.time() >= transmit_time
         if tick:
-            s1 = min(max(s1 + S1_INC * hy, 30), 120)
+            if not estop:
+                s1 = min(max(s1 + S1_INC * hy, 30), 120)
             transmit_time += TIME_SC
             print stick, buttons
-            ard.send(State.RUN, fl, fr, bl, br, l, r, s1)
+            ard.send(state, fl, fr, bl, br, l, r, s1)
             print
 
-        if state == State.ERROR:
+        if estop:
             continue
 
         # Get next event.
@@ -156,7 +158,7 @@ def main(joy_idx, host, port):
             num = e.dict['button']
 
             if 6 <= num < 12:
-                state = State.ERROR
+                estop = True
                 fl = fr = br = bl = l = r = 0
                 s1 = s2 = s3 = 90
             else:
