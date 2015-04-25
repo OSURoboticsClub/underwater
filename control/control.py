@@ -13,12 +13,14 @@ from math import sqrt
 from sys import stdout
 
 
-HOR_SC = 1.0
-VERT_SC = 0.5
-ROT_SC = 0.3
-ROLL_SC = 0.2
+TIME_SC = 0.25
 
-S1_SC = 1.0
+HOR_SC = 1.0 * TIME_SC
+VERT_SC = 0.5 * TIME_SC
+ROT_SC = 0.3 * TIME_SC
+ROLL_SC = 0.2 * TIME_SC
+
+S1_INC = int(round(20 * TIME_SC))
 
 
 class State(object):
@@ -121,8 +123,9 @@ def main(joy_idx, host, port):
 
     transmit_time = time.time()
 
+    x = y = z = th = hx = hy = 0
     fl = fr = bl = br = l = r = 0
-    s1 = 90
+    s1 = 45
 
     state = State.RUN
 
@@ -133,7 +136,8 @@ def main(joy_idx, host, port):
             print
         tick = time.time() >= transmit_time
         if tick:
-            transmit_time += .25
+            s1 = min(max(s1 + S1_INC * hy, 0), 90)
+            transmit_time += TIME_SC
             print stick, buttons
             ard.send(state, fl, fr, bl, br, l, r, s1)
             print
@@ -185,8 +189,6 @@ def main(joy_idx, host, port):
 
             l += 128.0 * hx * ROLL_SC
             r += 128.0 * -hx * ROLL_SC
-
-            s1 = 90 + int(90.0 * S1_SC * hy)
 
 
 if __name__ == '__main__':
