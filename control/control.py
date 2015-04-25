@@ -17,6 +17,10 @@ HOR_SC = 1.0
 VERT_SC = 1.0
 ROT_SC = 0.1
 
+S1_SC = 1.0
+S2_SC = 1.0
+S3_SC = 1.0
+
 
 class State(object):
     IDLE = 0
@@ -29,11 +33,15 @@ def itb16(i):
     return (i >> 8, i & (2**8 - 1))
 
 
-def clamp8(i):
+def clamp8s(i):
     return max(min(i, 127), -128)
 
 
-def clamp16(i):
+def clamp8u(i):
+    return max(min(i, 255), 0)
+
+
+def clamp16s(i):
     return max(min(i, 32767), -32768)
 
 
@@ -41,12 +49,16 @@ def clamp16u(i):
     return max(min(i, 65536), 0)
 
 
-def fti8(f):
-    return clamp8(int(f * 128))
+def fti8s(f):
+    return clamp8s(int(round(f)))
 
 
-def fti16(f):
-    return clamp16(int(f * 32768))
+def fti8u(f):
+    return clamp8u(int(round(f)))
+
+
+def fti16s(f):
+    return clamp16s(int(round(f)))
 
 
 def format_msg(msg):
@@ -137,8 +149,6 @@ def main(joy_idx, host, port):
                 pygame.JOYBUTTONUP):
             continue
 
-        z = -stick[2]
-
         # Handle event.
         if e.type in (pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP):
             num = e.dict['button']
@@ -150,10 +160,8 @@ def main(joy_idx, host, port):
             else:
                 buttons[e.dict['button']] = (e.type == pygame.JOYBUTTONDOWN)
 
-                l = r = clamp8(int(
-                    128 * sc * VERT_SC * buttons[4] - buttons[2]))
-
-                s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
+                l = r = fti8s(128.0 * sc * VERT_SC * (buttons[4] - buttons[2]))
+                s3 = 90 + int(90.0 * S3_SC * (buttons[0] - buttons[1]))
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
@@ -161,6 +169,7 @@ def main(joy_idx, host, port):
 
             x = stick[0]
             y = -stick[1]
+            z = -stick[2]
             sc = (-stick[3] + 1.0) / 2.0
 
             fl = br = sqrt(2) / 2 * (x + y)
@@ -174,11 +183,11 @@ def main(joy_idx, host, port):
             bl += -rot
 
             fl, fr, br, bl = map(
-                lambda n: clamp8(int(128 * sc * HOR_SC * n)),
+                lambda n: fti8s(128.0 * sc * HOR_SC * n),
                 (fl, fr, br, bl))
 
-            s1 = 90 + 90 * int(stick[4])
-            s2 = 90 + 90 * int(stick[5])
+            s1 = 90 + int(90.0 * S1_SC * stick[4])
+            s2 = 90 + int(90.0 * S2_SC * stick[5])
 
 
 if __name__ == '__main__':
