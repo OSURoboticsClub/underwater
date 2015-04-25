@@ -13,6 +13,8 @@ from math import sqrt
 from sys import stdout
 
 
+HOR_SC = 1.0
+VERT_SC = 1.0
 ROT_SC = 0.1
 
 
@@ -109,9 +111,10 @@ def main(joy_idx, host, port):
     transmit_time = time.time()
 
     fl = fr = bl = br = l = r = 0
+    s1 = s2 = s3 = 90
+    sc = 0.0
 
     state = State.RUN
-    s1 = s2 = s3 = 0
 
     while True:
         msg = ard.recv()
@@ -120,11 +123,6 @@ def main(joy_idx, host, port):
             print
         tick = time.time() >= transmit_time
         if tick:
-            if state == State.RUN:
-                s1 = 90 + 90 * int(stick[4])
-                s2 = 90 + 90 * int(stick[5])
-                s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
-
             transmit_time += .25
             print stick, buttons
             ard.send(state, fl, fr, br, bl, l, r, s1, s2, s3)
@@ -139,44 +137,48 @@ def main(joy_idx, host, port):
                 pygame.JOYBUTTONUP):
             continue
 
+        z = -stick[2]
+
         # Handle event.
-        if e.type == pygame.JOYBUTTONDOWN:
+        if e.type in (pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP):
             num = e.dict['button']
+
             if 6 <= num < 12:
                 state = State.ERROR
+                fl = fr = br = bl = l = r = 0
+                s1 = s2 = s3 = 90
             else:
-                buttons[e.dict['button']] = True
-        elif e.type == pygame.JOYBUTTONUP:
-            if not (6 <= num < 12):
-                buttons[e.dict['button']] = False
+                buttons[e.dict['button']] = (e.type == pygame.JOYBUTTONDOWN)
+
+                l = r = clamp8(int(
+                    128 * sc * VERT_SC * buttons[4] - buttons[2]))
+
+                s3 = 90 + 90 * (int(buttons[0]) - int(buttons[1]))
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
             stick[axis] = value
 
-        x = stick[0]
-        y = -stick[1]
-        z = -stick[2]
-        sc = (-stick[3] + 1.0) / 2.0
+            x = stick[0]
+            y = -stick[1]
+            sc = (-stick[3] + 1.0) / 2.0
 
-        fl = br = sqrt(2) / 2 * (x + y)
-        fr = bl = sqrt(2) / 2 * (-x + y)
-        l = r = int(buttons[4]) - int(buttons[2])
+            fl = br = sqrt(2) / 2 * (x + y)
+            fr = bl = sqrt(2) / 2 * (-x + y)
 
-        # rot is counter-clockwise
-        rot = ROT_SC * z
-        fl += -rot
-        fr += rot
-        br += rot
-        bl += -rot
+            # rot is counter-clockwise
+            rot = ROT_SC * z
+            fl += -rot
+            fr += rot
+            br += rot
+            bl += -rot
 
-        # TODO: Make this prettier.
-        fl = clamp8(int(128 * sc * fl))
-        fr = clamp8(int(128 * sc * fr))
-        br = clamp8(int(128 * sc * br))
-        bl = clamp8(int(128 * sc * bl))
-        l = clamp8(int(128 * sc * l))
-        r = clamp8(int(128 * sc * r))
+            fl, fr, br, bl = map(
+                lambda x: clamp8(int(128 * sc * HOR_SC * x)),
+                (fl, fr, br, bl))
+
+            s1 = 90 + 90 * int(stick[4])
+            s2 = 90 + 90 * int(stick[5])
 
 
 if __name__ == '__main__':
