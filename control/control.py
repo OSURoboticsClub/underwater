@@ -101,7 +101,7 @@ def init_joystick(joy_idx):
 
 
 def main(joy_idx, host, port):
-    stick = [0] * 6
+    stick = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
     buttons = [False] * 6
 
     ard = Arduino(host, port)
