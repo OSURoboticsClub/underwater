@@ -13,7 +13,7 @@ from math import sqrt
 from sys import stdout
 
 
-HOR_SC = 1.0
+HOR_SC = 0.1
 VERT_SC = 1.0
 ROT_SC = 0.1
 
@@ -124,7 +124,6 @@ def main(joy_idx, host, port):
 
     fl = fr = bl = br = l = r = 0
     s1 = s2 = s3 = 90
-    sc = 0.0
 
     state = State.RUN
 
@@ -159,8 +158,6 @@ def main(joy_idx, host, port):
                 s1 = s2 = s3 = 90
             else:
                 buttons[e.dict['button']] = (e.type == pygame.JOYBUTTONDOWN)
-
-                l = r = fti8s(128.0 * sc * VERT_SC * (buttons[4] - buttons[2]))
                 s3 = 90 + int(90.0 * S3_SC * (buttons[0] - buttons[1]))
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
@@ -170,10 +167,10 @@ def main(joy_idx, host, port):
             x = stick[0]
             y = -stick[1]
             z = -stick[2]
-            sc = (-stick[3] + 1.0) / 2.0
+            th = -stick[3]
 
-            fl = br = sqrt(2) / 2 * (x + y)
-            fr = bl = sqrt(2) / 2 * (-x + y)
+            fl = br = sqrt(2) / 2 * (x + y) * HOR_SC
+            fr = bl = sqrt(2) / 2 * (-x + y) * HOR_SC
 
             # rot is counter-clockwise
             rot = ROT_SC * z
@@ -183,11 +180,13 @@ def main(joy_idx, host, port):
             bl += -rot
 
             fl, fr, br, bl = map(
-                lambda n: fti8s(128.0 * sc * HOR_SC * n),
+                lambda n: fti8s(128.0 * n),
                 (fl, fr, br, bl))
 
-            s1 = 90 + int(90.0 * S1_SC * stick[4])
-            s2 = 90 + int(90.0 * S2_SC * stick[5])
+            l = r = fti8s(128.0 * th * VERT_SC)
+
+            s1 = 90 + int(90.0 * stick[4] * S1_SC)
+            s2 = 90 + int(90.0 * stick[5] * S2_SC)
 
 
 if __name__ == '__main__':
