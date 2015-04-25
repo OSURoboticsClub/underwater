@@ -82,7 +82,7 @@ class Arduino(object):
         self.sock.setblocking(0)
 
     def send(self, state, fl, fr, bl, br, l, r, s1):
-        msg = [state] + map(fti8s, (fl, fr, bl, br, l, r)) + [fti8u(s1)]
+        msg = [state] + map(fti8s, (fl, fr, bl, br, l, r)) + [fti8u(s1), 0, 0]
         self.sock.sendto(
             b''.join(chr(byte % 256) for byte in msg), 0, self.remote_addr)
         stdout.write(format_msg(msg).encode('utf8'))
@@ -155,9 +155,6 @@ def main(joy_idx, host, port):
                 state = State.ERROR
                 fl = fr = br = bl = l = r = 0
                 s1 = s2 = s3 = 90
-            else:
-                buttons[e.dict['button']] = (e.type == pygame.JOYBUTTONDOWN)
-                s1 = 90 + int(90.0 * S1_SC * (buttons[0] - buttons[1]))
         elif e.type == pygame.JOYAXISMOTION:
             axis = e.dict['axis']
             value = e.dict['value']
@@ -167,6 +164,8 @@ def main(joy_idx, host, port):
             y = -stick[1]
             z = -stick[2]
             th = -stick[3]
+            hx = stick[4]
+            hy = -stick[5]
 
             fl = br = sqrt(2) / 2 * (x + y) * HOR_SC
             fr = bl = sqrt(2) / 2 * (-x + y) * HOR_SC
@@ -184,8 +183,10 @@ def main(joy_idx, host, port):
 
             l = r = fti8s(128.0 * th * VERT_SC)
 
-            l += 128.0 * stick[4] * ROLL_SC
-            r += 128.0 * -stick[4] * ROLL_SC
+            l += 128.0 * hx * ROLL_SC
+            r += 128.0 * -hx * ROLL_SC
+
+            s1 = 90 + int(90.0 * S1_SC * hy)
 
 
 if __name__ == '__main__':
